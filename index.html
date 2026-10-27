@@ -1424,9 +1424,13 @@
       // Music staves have multiple horizontal lines + vertical barlines,
       // so real staff ends have significant vertical ink in the column (>= minBarlineInk).
       // This filters out stray dust or smudges in the right margin.
+      // If user has adjusted crop, search strictly inside the existing right crop boundary!
       const minBarlineInk = Math.max(4, Math.round(sensitivity / 4));
       let foundStaffRight = false;
-      for (let x = w - edgeSkipX - 1; x >= Math.round(w * 0.35); x--) {
+      const maxSearchRightPx = (pageObj.crop && typeof pageObj.crop.right === 'number' && pageObj.crop.right > 0)
+        ? Math.min(w - edgeSkipX - 1, Math.round((1 - pageObj.crop.right) * w))
+        : (w - edgeSkipX - 1);
+      for (let x = maxSearchRightPx; x >= Math.round(w * 0.35); x--) {
         const colDensity = staffColInk[x] + (staffColInk[x - 1] || 0) + (staffColInk[x + 1] || 0);
         if (colDensity >= minBarlineInk) {
           scoreRightPx = x;
@@ -1458,7 +1462,7 @@
       }
 
       if (!foundStaffRight || scoreRightPx <= scoreLeftPx) {
-        scoreRightPx = noCornerRightPx;
+        scoreRightPx = Math.min(maxSearchRightPx, noCornerRightPx);
       }
       if (!foundStaffLeft || scoreLeftPx >= scoreRightPx) {
         scoreLeftPx = noCornerLeftPx;
@@ -1474,6 +1478,11 @@
         fullTop: round4(fullTopPx / h),
         fullBottom: round4(fullBottomPx / h)
       };
+
+      // Confine scoreRight within user's adjusted crop boundaries if crop is present
+      if (pageObj.crop && typeof pageObj.crop.right === 'number' && pageObj.crop.right > 0) {
+        bounds.scoreRight = round4(clamp(bounds.scoreRight, (pageObj.crop.left || 0) + 0.02, 1 - pageObj.crop.right));
+      }
 
       pageObj.scoreLeft = bounds.scoreLeft;
       pageObj.scoreRight = bounds.scoreRight;
@@ -1667,6 +1676,11 @@
           top: round4(newTop),
           bottom: round4(1 - newTop - targetH)
         };
+        if (typeof p.scoreRight === 'number') {
+          const maxSr = round4(1 - p.crop.right);
+          const minSr = round4(p.crop.left + 0.02);
+          p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
+        }
         drawThumbnail(i);
       }
 
@@ -1826,38 +1840,48 @@
       editorCtx.stroke();
 
       // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badges)
+      // Strictly confined inside the user's adjusted crop box [cx1..cx2] and [cy1..cy2]
       if (typeof p.scoreRight === 'number') {
-        const scoreRx = Math.round(p.scoreRight * W);
+        const clampedSr = clamp(p.scoreRight, p.crop.left + 0.01, 1 - p.crop.right);
+        const scoreRx = Math.round(clampedSr * W);
         const isDraggingAnchor = (dragMode === 'score-right');
-        editorCtx.strokeStyle = isDraggingAnchor ? '#fbbf24' : 'rgba(245, 158, 11, 0.85)';
+        editorCtx.strokeStyle = isDraggingAnchor ? '#fbbf24' : 'rgba(245, 158, 11, 0.9)';
         editorCtx.lineWidth = isDraggingAnchor ? 2.5 : 1.8;
         editorCtx.setLineDash([5, 3]);
         editorCtx.beginPath();
-        editorCtx.moveTo(scoreRx, Math.max(0, cy1 - 14));
-        editorCtx.lineTo(scoreRx, Math.min(H, cy2 + 14));
+        editorCtx.moveTo(scoreRx, cy1);
+        editorCtx.lineTo(scoreRx, cy2);
         editorCtx.stroke();
 
-        // Top & Bottom Anchor Badges
+        // Top & Bottom Anchor Badges (drawn strictly at the crop box top/bottom edges)
         editorCtx.setLineDash([]);
         editorCtx.fillStyle = '#f59e0b';
         editorCtx.strokeStyle = '#78350f';
         editorCtx.lineWidth = 1.5;
         // Top badge:
         editorCtx.beginPath();
-        editorCtx.rect(scoreRx - 5, Math.max(0, cy1 - 12), 10, 10);
+        editorCtx.rect(scoreRx - 4, cy1, 8, 8);
         editorCtx.fill();
         editorCtx.stroke();
         // Bottom badge:
         editorCtx.beginPath();
-        editorCtx.rect(scoreRx - 5, Math.min(H - 10, cy2 + 2), 10, 10);
+        editorCtx.rect(scoreRx - 4, cy2 - 8, 8, 8);
         editorCtx.fill();
         editorCtx.stroke();
 
-        // Anchor text label
-        editorCtx.fillStyle = '#f59e0b';
+        // Anchor text label badge (drawn cleanly inside the top of the crop box)
+        const labelText = `⚓ ${(clampedSr * 100).toFixed(1)}%`;
         editorCtx.font = 'bold 11px sans-serif';
         editorCtx.textAlign = 'center';
-        editorCtx.fillText(`⚓ ${(p.scoreRight * 100).toFixed(1)}%`, scoreRx, Math.max(12, cy1 - 16));
+        const textMetrics = editorCtx.measureText(labelText);
+        const textW = textMetrics.width;
+        editorCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+        editorCtx.fillRect(scoreRx - textW / 2 - 4, cy1 + 12, textW + 8, 16);
+        editorCtx.strokeStyle = '#f59e0b';
+        editorCtx.lineWidth = 1;
+        editorCtx.strokeRect(scoreRx - textW / 2 - 4, cy1 + 12, textW + 8, 16);
+        editorCtx.fillStyle = '#f59e0b';
+        editorCtx.fillText(labelText, scoreRx, cy1 + 24);
       }
       editorCtx.restore();
 
@@ -1926,7 +1950,8 @@
 
         for (let i = 0; i < pagesData.length; i++) {
           const p = pagesData[i];
-          const sr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+          const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+          const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
           const sl = typeof p.scoreLeft === 'number' ? p.scoreLeft : p.crop.left;
           const leftPt = Math.max(1, (sr - p.crop.left) * p.origWidth);
           const rightPt = Math.max(0, ((1 - p.crop.right) - sr) * p.origWidth);
@@ -2013,7 +2038,8 @@
         targetScoreRightXMm = (minScoreRightXMm + maxScoreRightXMm) / 2;
       }
 
-      const sr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+      const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+      const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
       const leftFromScoreRightMm = (sr - p.crop.left) * p.origWidth * scaleMmPerPt;
 
       const destXMm = targetScoreRightXMm - leftFromScoreRightMm;
@@ -2207,10 +2233,11 @@
       const x2 = (1 - p.crop.right) * W;
       const y2 = (1 - p.crop.bottom) * H;
 
-      // 1. Test Score Right Anchor line (within 8px horizontally)
+      // 1. Test Score Right Anchor line (within 8px horizontally, strictly within crop vertical span)
       if (typeof p.scoreRight === 'number') {
-        const scoreRx = p.scoreRight * W;
-        if (Math.abs(mx - scoreRx) <= 8 && my >= y1 - 18 && my <= y2 + 18) {
+        const clampedSr = clamp(p.scoreRight, p.crop.left, 1 - p.crop.right);
+        const scoreRx = clampedSr * W;
+        if (Math.abs(mx - scoreRx) <= 8 && my >= y1 && my <= y2) {
           return 'score-right';
         }
       }
@@ -2257,9 +2284,11 @@
       const H = editorCanvas.height;
       const p = pagesData[currentPageIdx];
 
-      // Dragging the amber Score Right Anchor directly
+      // Dragging the amber Score Right Anchor directly (strictly clamped within crop boundaries)
       if (dragMode === 'score-right') {
-        const newSr = clamp(pos.x / W, p.crop.left + 0.05, 0.995);
+        const maxSr = round4(1 - p.crop.right);
+        const minSr = round4(p.crop.left + 0.02);
+        const newSr = clamp(pos.x / W, minSr, maxSr);
         p.scoreRight = round4(newSr);
         const srEl = document.getElementById('numScoreRight');
         if (srEl) srEl.value = (p.scoreRight * 100).toFixed(1);
@@ -2298,6 +2327,14 @@
       }
 
       pagesData[currentPageIdx].crop = c;
+
+      // Automatically clamp scoreRight so it is ALWAYS strictly confined inside the user's adjusted crop box!
+      if (typeof p.scoreRight === 'number') {
+        const maxSr = round4(1 - c.right);
+        const minSr = round4(c.left + 0.02);
+        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
+      }
+
       syncInspectorFromPage();
       renderActiveView();
     });
@@ -2358,7 +2395,11 @@
       const p = pagesData[currentPageIdx];
       const parsed = parseFloat(val);
       if (isNaN(parsed)) return;
-      p.scoreRight = round4(clamp(parsed / 100, p.crop.left + 0.05, 0.995));
+      const maxSr = round4(1 - p.crop.right);
+      const minSr = round4(p.crop.left + 0.02);
+      p.scoreRight = round4(clamp(parsed / 100, minSr, maxSr));
+      const srEl = document.getElementById('numScoreRight');
+      if (srEl) srEl.value = (p.scoreRight * 100).toFixed(1);
       drawThumbnail(currentPageIdx);
       renderActiveView();
     }
@@ -2368,6 +2409,9 @@
       const p = pagesData[currentPageIdx];
       p.rawBounds = null;
       analyzePageInkBounds(p);
+      const maxSr = round4(1 - p.crop.right);
+      const minSr = round4(p.crop.left + 0.02);
+      p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
       syncInspectorFromPage();
       drawThumbnail(currentPageIdx);
       renderActiveView();
@@ -2380,7 +2424,9 @@
       const isCurOdd = (currentPageIdx % 2 === 0);
       for (let i = 0; i < pagesData.length; i++) {
         if (scope === 'all' || (scope === 'parity' && (i % 2 === 0) === isCurOdd)) {
-          pagesData[i].scoreRight = targetSr;
+          const maxSr = round4(1 - pagesData[i].crop.right);
+          const minSr = round4(pagesData[i].crop.left + 0.02);
+          pagesData[i].scoreRight = round4(clamp(targetSr, minSr, maxSr));
           drawThumbnail(i);
         }
       }
@@ -2409,6 +2455,12 @@
       const right = clamp((parseFloat(document.getElementById('numCropRight').value) || 0) / 100, 0, 0.45);
 
       p.crop = { top: round4(top), bottom: round4(bottom), left: round4(left), right: round4(right) };
+      if (typeof p.scoreRight === 'number') {
+        const maxSr = round4(1 - p.crop.right);
+        const minSr = round4(p.crop.left + 0.02);
+        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
+      }
+      syncInspectorFromPage();
       drawThumbnail(currentPageIdx);
       renderActiveView();
     }
@@ -2421,6 +2473,11 @@
       for (let i = 0; i < pagesData.length; i++) {
         if (scope === 'all' || (scope === 'parity' && (i % 2 === 0) === isCurOdd)) {
           pagesData[i].crop = { ...srcCrop };
+          if (typeof pagesData[i].scoreRight === 'number') {
+            const maxSr = round4(1 - pagesData[i].crop.right);
+            const minSr = round4(pagesData[i].crop.left + 0.02);
+            pagesData[i].scoreRight = round4(clamp(pagesData[i].scoreRight, minSr, maxSr));
+          }
           drawThumbnail(i);
         }
       }
@@ -2443,6 +2500,9 @@
         // Automatically re-detect score boundaries on newly rotated page
         p.rawBounds = null;
         analyzePageInkBounds(p);
+        const maxSr = round4(1 - p.crop.right);
+        const minSr = round4(p.crop.left + 0.02);
+        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
         syncInspectorFromPage();
         renderActiveView();
       }, 350);

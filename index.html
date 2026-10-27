@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ScoreMargin Studio — Semi-Auto PDF Margin & Deskew Tool</title>
+  <title>ScoreMargin Studio — Sheet Music PDF Margin & Unroll Tool</title>
   <!-- PDF.js (v3.11.174) & Worker -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
@@ -679,6 +679,7 @@
     <div class="header-actions">
       <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" />
       <button class="btn" onclick="document.getElementById('pdfFileInput').click()">📂 Open PDF</button>
+      <button class="btn" id="btnUnrollAllHeader" style="border-color:#0ea5e9; color:#38bdf8;" onclick="autoDewarpAllPages()" disabled>🌊 Auto-Unroll All</button>
       <button class="btn btn-primary" id="btnAutoAll" onclick="autoDetectAllPages()" disabled>✨ Auto-Crop All Pages</button>
       <button class="btn btn-success" id="btnExportPdf" onclick="exportAdjustedPdf()" disabled>💾 Save As PDF</button>
     </div>
@@ -800,27 +801,6 @@
         <button class="btn btn-sm" onclick="unifyCropSizeAcrossPages()" title="Unifies the crop width & height across all pages and auto-centers each box on the detected music score">
           📏 Unify Crop Width & Height Across All Pages
         </button>
-
-        <!-- Score Right Anchor (Manual & Auto Adjustment) -->
-        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 9px 10px; margin-top: 5px; display: flex; flex-direction: column; gap: 6px;">
-          <div class="control-row">
-            <span class="control-label" style="color:#f59e0b; font-weight:700;">⚓ Score Right Anchor</span>
-            <div style="display:flex; align-items:center; gap:4px;">
-              <input type="number" id="numScoreRight" min="40" max="99" step="0.1" value="92.0" style="width:65px; text-align:center; border-color: rgba(245, 158, 11, 0.5);" onchange="onManualScoreRightChange(this.value)" />
-              <span style="font-size:0.75rem; color:var(--text-muted);">%</span>
-            </div>
-          </div>
-          <div class="section-subtitle" style="font-size:0.71rem; color:#cbd5e1; line-height:1.35;">
-            • Drag the <b>amber dashed line (⚓)</b> on the canvas left/right or adjust % above.
-          </div>
-          <div class="grid-2" style="margin-top:2px;">
-            <button class="btn btn-sm" onclick="reDetectScoreRightCurrentPage()" title="Re-detect score right edge for current page">📐 Re-detect Right</button>
-            <button class="btn btn-sm" onclick="applyScoreRightToAllPages('all')" title="Copy current score right anchor to all pages">Copy Anchor to All</button>
-          </div>
-          <button class="btn btn-sm" onclick="alignCropToScoreRight()" style="font-size:0.72rem; padding:4px;" title="Set right crop boundary exactly to Anchor + Padding">
-            ⇥ Set Right Crop to Anchor + Padding
-          </button>
-        </div>
       </div>
 
       <!-- 2. Fine Crop Adjustment & Batch Sync -->
@@ -831,19 +811,19 @@
         <div class="grid-4">
           <div class="num-field">
             <span>Top (%)</span>
-            <input type="number" id="numCropTop" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+            <input type="number" id="numCropTop" min="0" max="45" step="0.2" value="5" oninput="onNumericCropChange()" onchange="onNumericCropChange()" />
           </div>
           <div class="num-field">
             <span>Bottom (%)</span>
-            <input type="number" id="numCropBottom" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+            <input type="number" id="numCropBottom" min="0" max="45" step="0.2" value="5" oninput="onNumericCropChange()" onchange="onNumericCropChange()" />
           </div>
           <div class="num-field">
             <span>Left (%)</span>
-            <input type="number" id="numCropLeft" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+            <input type="number" id="numCropLeft" min="0" max="45" step="0.2" value="5" oninput="onNumericCropChange()" onchange="onNumericCropChange()" />
           </div>
           <div class="num-field">
             <span>Right (%)</span>
-            <input type="number" id="numCropRight" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+            <input type="number" id="numCropRight" min="0" max="45" step="0.2" value="5" oninput="onNumericCropChange()" onchange="onNumericCropChange()" />
           </div>
         </div>
 
@@ -853,10 +833,43 @@
         </div>
       </div>
 
-      <!-- 3. Deskew & Image Enhancement -->
+      <!-- 3. Deskew, Staff Unroll & Image Enhancement -->
       <div class="control-section">
         <div class="section-title">
-          <span>3. Deskew & Image Cleanup</span>
+          <span>3. Unroll (Dewarp), Deskew & Cleanup</span>
+        </div>
+
+        <!-- Non-Uniform Staff-Line Guided Unroll (Dewarp) Card -->
+        <div style="background: rgba(14, 165, 233, 0.09); border: 1px solid rgba(56, 189, 248, 0.42); border-radius: 8px; padding: 9px 10px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 6px;">
+          <div class="control-row">
+            <span class="control-label" style="color:#38bdf8; font-weight:700;">🌊 Non-Uniform Staff Unroll</span>
+            <span id="dewarpStatusBadge" style="font-size:0.68rem; background:rgba(15,23,42,0.8); color:#94a3b8; padding:2px 6px; border-radius:4px; border:1px solid #334155;">Off</span>
+          </div>
+          <div class="section-subtitle" style="font-size:0.71rem; color:#cbd5e1; line-height:1.35;">
+            • Tracks all 5-line staves across the page and flattens non-uniform book-spine curvature into straight horizontal lines.
+          </div>
+          <div class="grid-2" style="margin-top:2px;">
+            <button class="btn btn-sm btn-primary" style="background:#0284c7; border-color:#38bdf8;" onclick="autoDewarpCurrentPage()">🌊 Auto-Unroll Page</button>
+            <button class="btn btn-sm btn-primary" style="background:#0369a1; border-color:#38bdf8;" onclick="autoDewarpAllPages()">🌊 Auto-Unroll All</button>
+          </div>
+          <label class="checkbox-row" style="margin-top:2px;">
+            <input type="checkbox" id="chkDewarpEnabled" onchange="onToggleDewarpEnabled(this.checked)" />
+            <span>Enable Non-Uniform Unroll on This Page</span>
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" id="chkShowStaffOverlay" onchange="onToggleStaffOverlay(this.checked)" />
+            <span>Show Detected Staff Curves & Ruler Overlay</span>
+          </label>
+          <div class="control-row" style="margin-top:2px;">
+            <span class="control-label" style="font-size:0.73rem;">Vertical Straightening</span>
+            <span class="control-value" id="valDewarpStrength" style="color:#38bdf8;">100%</span>
+          </div>
+          <input type="range" id="rngDewarpStrength" min="0" max="125" step="5" value="100" oninput="onDewarpSliderChange()" />
+          <div class="control-row">
+            <span class="control-label" style="font-size:0.73rem;">Horizontal Spine Unroll</span>
+            <span class="control-value" id="valHorizUnroll" style="color:#38bdf8;">60%</span>
+          </div>
+          <input type="range" id="rngHorizUnroll" min="0" max="150" step="10" value="60" oninput="onDewarpSliderChange()" />
         </div>
 
         <div class="control-row">
@@ -886,6 +899,14 @@
           <input type="checkbox" id="chkBinarize" onchange="onFilterChange()" />
           <span>Strict 1-Bit Binarize (Pure Black & White)</span>
         </label>
+
+        <div id="wrapLinePreserve" style="opacity:0.38; pointer-events:none; transition:opacity 0.15s; display:flex; flex-direction:column; gap:4px;">
+          <div class="control-row" style="margin-top:2px;">
+            <span class="control-label" title="Prevents thin or light gray staff lines from disappearing when converting or exporting to 1-Bit Monochrome">1-Bit Staff Line Rescue</span>
+            <span class="control-value" id="valLinePreserve" style="color:#38bdf8;">80%</span>
+          </div>
+          <input type="range" id="rngLinePreserve" min="0" max="100" step="5" value="80" disabled oninput="onFilterChange()" />
+        </div>
 
         <button class="btn btn-sm" onclick="applyFiltersToAllPages()">Apply Image Cleanup to All Pages</button>
       </div>
@@ -925,26 +946,26 @@
         <div class="grid-4">
           <div class="num-field">
             <span>Top (mm)</span>
-            <input type="number" id="outMarginTop" min="0" max="50" step="1" value="8" onchange="onOutputConfigChange()" />
+            <input type="number" id="outMarginTop" min="0" max="50" step="1" value="8" oninput="onOutputConfigChange()" onchange="onOutputConfigChange()" />
           </div>
           <div class="num-field">
             <span>Bottom (mm)</span>
-            <input type="number" id="outMarginBottom" min="0" max="50" step="1" value="8" onchange="onOutputConfigChange()" />
+            <input type="number" id="outMarginBottom" min="0" max="50" step="1" value="8" oninput="onOutputConfigChange()" onchange="onOutputConfigChange()" />
           </div>
           <div class="num-field">
             <span>Left (mm)</span>
-            <input type="number" id="outMarginLeft" min="0" max="50" step="1" value="10" onchange="onOutputConfigChange()" />
+            <input type="number" id="outMarginLeft" min="0" max="50" step="1" value="10" oninput="onOutputConfigChange()" onchange="onOutputConfigChange()" />
           </div>
           <div class="num-field">
             <span>Right (mm)</span>
-            <input type="number" id="outMarginRight" min="0" max="50" step="1" value="10" onchange="onOutputConfigChange()" />
+            <input type="number" id="outMarginRight" min="0" max="50" step="1" value="10" oninput="onOutputConfigChange()" onchange="onOutputConfigChange()" />
           </div>
         </div>
 
         <div class="control-row" style="margin-top:4px;">
           <span class="control-label">Binding Gutter Offset (Odd/Even)</span>
           <div style="display:flex; align-items:center; gap:4px;">
-            <input type="number" id="outGutterMm" min="0" max="25" step="1" value="0" style="width:58px; text-align:center;" onchange="onOutputConfigChange()" />
+            <input type="number" id="outGutterMm" min="0" max="25" step="1" value="0" style="width:58px; text-align:center;" oninput="onOutputConfigChange()" onchange="onOutputConfigChange()" />
             <span style="font-size:0.75rem; color:var(--text-muted);">mm</span>
           </div>
         </div>
@@ -956,7 +977,7 @@
 
         <div class="control-row" id="rowStartPageNum" style="display:none;">
           <span class="control-label">Starting Page Number</span>
-          <input type="number" id="numStartPage" value="1" min="1" max="999" style="width:70px; text-align:center;" onchange="onOutputConfigChange()" />
+          <input type="number" id="numStartPage" value="1" min="1" max="999" style="width:70px; text-align:center;" oninput="onOutputConfigChange()" onchange="onOutputConfigChange()" />
         </div>
       </div>
 
@@ -1150,7 +1171,7 @@
 
           const page = await pdfDoc.getPage(i);
           const baseVp = page.getViewport({ scale: 1.0 });
-          const workScale = Math.min(2.2, Math.max(1.2, 1300 / Math.max(baseVp.width, baseVp.height)));
+          const workScale = Math.min(2.6, Math.max(1.4, 1650 / Math.max(baseVp.width, baseVp.height)));
           const vp = page.getViewport({ scale: workScale });
 
           const workCanvas = document.createElement('canvas');
@@ -1172,10 +1193,17 @@
             rawBounds: null,
             crop: { top: 0.05, bottom: 0.05, left: 0.06, right: 0.06 },
             skewDeg: 0,
+            dewarp: {
+              enabled: false,
+              strength: 100,
+              horizUnroll: 60,
+              data: null
+            },
             filters: {
               whiteLevel: 255,
               contrast: 100,
-              binarize: false
+              binarize: false,
+              linePreserve: 80
             }
           };
 
@@ -1213,6 +1241,7 @@
 
         dropzoneOverlay.style.display = 'none';
         document.getElementById('btnAutoAll').disabled = false;
+        document.getElementById('btnUnrollAllHeader').disabled = false;
         document.getElementById('btnExportPdf').disabled = false;
         document.getElementById('btnExportBottom').disabled = false;
 
@@ -1229,11 +1258,742 @@
     }
 
     // ============================================================================
-    // 4. Image Processing: Deskew + Contrast / White-level Cleanup
+    // 4. Staff-Line-Guided Non-Uniform Dewarp (Unroll) & Image Processing
     // ============================================================================
-    function createTransformedCanvas(pageObj, sourceCanvas = pageObj.workCanvas) {
-      const w = sourceCanvas.width;
-      const h = sourceCanvas.height;
+    function evalCombAt(proj, y, d) {
+      const h = proj.length;
+      const y0 = Math.round(y - 2 * d);
+      const y4 = Math.round(y + 2 * d);
+      if (y0 < 0 || y4 >= h) return 0;
+
+      const l0 = proj[y0];
+      const l1 = proj[Math.round(y - d)];
+      const l2 = proj[y];
+      const l3 = proj[Math.round(y + d)];
+      const l4 = proj[y4];
+
+      const s0 = proj[Math.round(y - 1.5 * d)];
+      const s1 = proj[Math.round(y - 0.5 * d)];
+      const s2 = proj[Math.round(y + 0.5 * d)];
+      const s3 = proj[Math.round(y + 1.5 * d)];
+
+      const outTop = proj[Math.max(0, Math.round(y - 3 * d))];
+      const outBot = proj[Math.min(h - 1, Math.round(y + 3 * d))];
+
+      const min1 = Math.min(l0, l1, l2, l3, l4);
+      const linesSum = l0 + l1 + l2 + l3 + l4 + 2.5 * min1;
+      const spacesSum = s0 + s1 + s2 + s3;
+      const outerSum = outTop + outBot;
+
+      return Math.max(0, linesSum - 1.05 * spacesSum - 0.75 * outerSum);
+    }
+
+    function detectStaffCurvesFromCanvas(canvas) {
+      const width = canvas.width;
+      const height = canvas.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const rgba = ctx.getImageData(0, 0, width, height).data;
+
+      const gray = new Uint8Array(width * height);
+      for (let i = 0, j = 0; i < rgba.length; i += 4, j++) {
+        gray[j] = (rgba[i] * 77 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
+      }
+
+      // 1. Strict thin horizontal line filter (r = 2..4px):
+      // Rejects thick 8px eighth-note beams and noteheads while preserving 1-3.5px staff lines
+      const ink = new Uint8Array(width * height);
+      const vR = Math.max(2, Math.min(4, Math.round(height * 0.0014)));
+      for (let y = vR + 1; y < height - vR - 1; y++) {
+        const rowOff = y * width;
+        for (let x = 1; x < width - 1; x++) {
+          const g = gray[rowOff + x];
+          if (g >= 232) continue;
+          const gUp = Math.max(gray[(y - vR) * width + x], gray[(y - vR - 1) * width + x]);
+          const gDn = Math.max(gray[(y + vR) * width + x], gray[(y + vR + 1) * width + x]);
+          const bg = Math.min(gUp, gDn);
+          const contrast = bg - g;
+          if (contrast > 6) {
+            ink[rowOff + x] = Math.min(255, contrast * 2);
+          }
+        }
+      }
+
+      // 2. Estimate dominant staff line spacing bestD (in pixels)
+      const numTestStrips = 16;
+      const stripW = Math.max(12, Math.round(width * 0.02));
+      const stripProjections = [];
+      for (let s = 0; s < numTestStrips; s++) {
+        const x0 = Math.round(width * (0.15 + (0.70 * s) / (numTestStrips - 1)));
+        const proj = new Float32Array(height);
+        for (let y = 0; y < height; y++) {
+          let sum = 0;
+          const rowOff = y * width;
+          for (let x = x0; x < Math.min(width, x0 + stripW); x++) {
+            sum += ink[rowOff + x];
+          }
+          proj[y] = sum / stripW;
+        }
+        stripProjections.push(proj);
+      }
+
+      const minD = Math.max(3.8, height * 0.0032);
+      const maxD = Math.min(26, height * 0.012);
+      let bestD = 10;
+      let bestDScore = -1;
+
+      for (let d = minD; d <= maxD; d += 0.15) {
+        let totalScore = 0;
+        const marginY = Math.ceil(3.2 * d) + 2;
+        for (let s = 0; s < numTestStrips; s++) {
+          const proj = stripProjections[s];
+          let stripEnergy = 0;
+          for (let y = marginY; y < height - marginY; y++) {
+            const comb = evalCombAt(proj, y, d);
+            if (comb > 0) stripEnergy += comb * comb;
+          }
+          totalScore += Math.sqrt(stripEnergy);
+        }
+        if (totalScore > bestDScore) {
+          bestDScore = totalScore;
+          bestD = d;
+        }
+      }
+
+      // 3. Build High-Resolution 2D Comb Response Map C[s][y] across Nx = 96 horizontal slices
+      const Nx = 96;
+      const xCenters = new Float32Array(Nx);
+      const xNorms = new Float32Array(Nx);
+      const sliceHalfW = Math.max(5, Math.round(width * 0.0075));
+      for (let s = 0; s < Nx; s++) {
+        xCenters[s] = Math.round(width * (0.025 + (0.95 * s) / (Nx - 1)));
+        xNorms[s] = xCenters[s] / width;
+      }
+
+      const slopes = [-0.22, -0.15, -0.09, -0.04, 0, 0.04, 0.09, 0.15, 0.22];
+      const combMap = Array.from({ length: Nx }, () => new Float32Array(height));
+      const combMapCue = Array.from({ length: Nx }, () => new Float32Array(height));
+      const cueD = bestD * 0.78;
+      const marginY = Math.ceil(3.2 * bestD) + 4;
+
+      for (let s = 0; s < Nx; s++) {
+        const xc = xCenters[s];
+        const xStart = Math.max(0, xc - sliceHalfW);
+        const xEnd = Math.min(width - 1, xc + sliceHalfW);
+        const span = xEnd - xStart + 1;
+        const cArr = combMap[s];
+        const cCueArr = combMapCue[s];
+        const isEdgeSlice = (s < Nx * 0.22 || s > Nx * 0.78);
+
+        for (const kSlope of slopes) {
+          if (!isEdgeSlice && Math.abs(kSlope) > 0.09) continue;
+          const proj = new Float32Array(height);
+          const yLo = Math.max(0, marginY - Math.ceil(3.2 * bestD));
+          const yHi = Math.min(height - 1, height - marginY + Math.ceil(3.2 * bestD));
+          for (let y = yLo; y <= yHi; y++) {
+            let sum = 0;
+            for (let x = xStart; x <= xEnd; x++) {
+              const yy = Math.round(y + (x - xc) * kSlope);
+              if (yy >= 0 && yy < height) {
+                sum += ink[yy * width + x];
+              }
+            }
+            proj[y] = sum / span;
+          }
+
+          for (let y = marginY; y < height - marginY; y++) {
+            const val = evalCombAt(proj, y, bestD);
+            if (val > cArr[y]) cArr[y] = val;
+            const valCue = evalCombAt(proj, y, cueD) * 0.90;
+            if (valCue > cCueArr[y]) cCueArr[y] = valCue;
+          }
+        }
+      }
+
+      // 4. Seed staves across slices [12% .. 88%] using top 35% of slices
+      const centerProfile = new Float32Array(height);
+      const cueProfile = new Uint8Array(height);
+      const sMid0 = Math.floor(Nx * 0.12);
+      const sMid1 = Math.ceil(Nx * 0.88);
+      for (let y = marginY; y < height - marginY; y++) {
+        const vals = [];
+        const valsCue = [];
+        const r = Math.round(bestD * 0.45);
+        for (let s = sMid0; s <= sMid1; s++) {
+          let localMax = 0;
+          let localCueMax = 0;
+          for (let dy = -r; dy <= r; dy++) {
+            if (combMap[s][y + dy] > localMax) localMax = combMap[s][y + dy];
+            if (combMapCue[s][y + dy] > localCueMax) localCueMax = combMapCue[s][y + dy];
+          }
+          vals.push(localMax);
+          valsCue.push(localCueMax);
+        }
+        vals.sort((a, b) => b - a);
+        valsCue.sort((a, b) => b - a);
+        const topK = Math.max(1, Math.floor(vals.length * 0.35));
+        let sum = 0, sumCue = 0;
+        for (let k = 0; k < topK; k++) {
+          sum += vals[k];
+          sumCue += valsCue[k];
+        }
+        centerProfile[y] = Math.max(sum / topK, sumCue / topK);
+        cueProfile[y] = (sumCue > sum * 1.05) ? 1 : 0;
+      }
+
+      const minStaffSep = Math.round(4.2 * bestD);
+      let globalMaxComb = 1;
+      for (let y = 0; y < height; y++) {
+        if (centerProfile[y] > globalMaxComb) globalMaxComb = centerProfile[y];
+      }
+      const minPeakThreshold = globalMaxComb * 0.22;
+      const candidatePeaks = [];
+
+      for (let y = Math.round(height * 0.03); y < Math.round(height * 0.97); y++) {
+        const val = centerProfile[y];
+        if (val < minPeakThreshold) continue;
+        let isMax = true;
+        for (let dy = -minStaffSep; dy <= minStaffSep; dy++) {
+          if (y + dy >= 0 && y + dy < height && centerProfile[y + dy] > val) {
+            isMax = false;
+            break;
+          }
+        }
+        if (isMax) {
+          const isCue = cueProfile[y] === 1;
+          const activeMap = isCue ? combMapCue : combMap;
+          let bestS = Math.floor(Nx / 2);
+          let bestY = y;
+          let bestVal = -1;
+          const r = Math.round(bestD * 0.45);
+          for (let s = Math.floor(Nx * 0.20); s <= Math.ceil(Nx * 0.80); s++) {
+            for (let dy = -r; dy <= r; dy++) {
+              if (activeMap[s][y + dy] > bestVal) {
+                bestVal = activeMap[s][y + dy];
+                bestS = s;
+                bestY = y + dy;
+              }
+            }
+          }
+          candidatePeaks.push({ ySeed: bestY, sSeed: bestS, strength: val, isCue });
+          y += Math.round(minStaffSep * 0.75);
+        }
+      }
+
+      // 5. Track each staff OUTWARDS from (sSeed, ySeed) via Locally-Normalized Viterbi DP
+      const maxStepY = Math.max(2, Math.round(bestD * 0.32));
+      const searchBandHalf = Math.round(bestD * 3.6);
+      const staves = [];
+
+      for (const peak of candidatePeaks) {
+        const activeMap = peak.isCue ? combMapCue : combMap;
+        const y0 = peak.ySeed;
+        const s0 = peak.sSeed;
+        const minY = Math.max(marginY, y0 - searchBandHalf);
+        const maxY = Math.min(height - marginY - 1, y0 + searchBandHalf);
+        const bandH = maxY - minY + 1;
+        const seedBy = y0 - minY;
+
+        const sliceBandMax = new Float32Array(Nx);
+        let peakBandMax = 1;
+        for (let s = 0; s < Nx; s++) {
+          let bMax = 0;
+          for (let by = 0; by < bandH; by++) {
+            const v = activeMap[s][minY + by];
+            if (v > bMax) bMax = v;
+          }
+          sliceBandMax[s] = bMax;
+          if (bMax > peakBandMax) peakBandMax = bMax;
+        }
+
+        const noiseFloor = peakBandMax * 0.06;
+        const normComb = Array.from({ length: Nx }, (_, s) => {
+          const arr = new Float32Array(bandH);
+          const denom = Math.max(sliceBandMax[s], peakBandMax * 0.22);
+          if (sliceBandMax[s] < noiseFloor) return arr;
+          for (let by = 0; by < bandH; by++) {
+            arr[by] = activeMap[s][minY + by] / denom;
+          }
+          return arr;
+        });
+
+        const rawY = new Float32Array(Nx);
+        const conf = new Float32Array(Nx);
+
+        // Track RIGHT from s0 to Nx - 1
+        {
+          const dp = Array.from({ length: Nx }, () => new Float32Array(bandH).fill(-1e9));
+          const back = Array.from({ length: Nx }, () => new Int32Array(bandH).fill(0));
+          dp[s0][seedBy] = normComb[s0][seedBy];
+
+          for (let s = s0 + 1; s < Nx; s++) {
+            const nArr = normComb[s];
+            const stepPenalty = (s > Nx * 0.78) ? 0.010 : 0.055;
+            for (let by = 0; by < bandH; by++) {
+              const reward = nArr[by];
+              let bestPrev = -1e9;
+              let bestPy = by;
+              const pMin = Math.max(0, by - maxStepY);
+              const pMax = Math.min(bandH - 1, by + maxStepY);
+              for (let py = pMin; py <= pMax; py++) {
+                const diff = by - py;
+                const score = dp[s - 1][py] - stepPenalty * (diff * diff);
+                if (score > bestPrev) {
+                  bestPrev = score;
+                  bestPy = py;
+                }
+              }
+              dp[s][by] = bestPrev + reward;
+              back[s][by] = bestPy;
+            }
+          }
+
+          let curBy = 0;
+          let bestEnd = -1e9;
+          for (let by = 0; by < bandH; by++) {
+            if (dp[Nx - 1][by] > bestEnd) {
+              bestEnd = dp[Nx - 1][by];
+              curBy = by;
+            }
+          }
+          for (let s = Nx - 1; s >= s0; s--) {
+            const yInt = minY + curBy;
+            const cM = activeMap[s][yInt - 1] || 0;
+            const c0 = activeMap[s][yInt] || 0;
+            const cP = activeMap[s][yInt + 1] || 0;
+            const denom = 2 * (2 * c0 - cM - cP);
+            const sub = (denom > 1e-3 && c0 >= cM && c0 >= cP) ? Math.max(-0.5, Math.min(0.5, (cP - cM) / denom)) : 0;
+            rawY[s] = yInt + sub;
+            conf[s] = c0;
+            curBy = back[s][curBy];
+          }
+        }
+
+        // Track LEFT from s0 down to 0
+        {
+          const dp = Array.from({ length: Nx }, () => new Float32Array(bandH).fill(-1e9));
+          const back = Array.from({ length: Nx }, () => new Int32Array(bandH).fill(0));
+          dp[s0][seedBy] = normComb[s0][seedBy];
+
+          for (let s = s0 - 1; s >= 0; s--) {
+            const nArr = normComb[s];
+            const stepPenalty = (s < Nx * 0.22) ? 0.010 : 0.055;
+            for (let by = 0; by < bandH; by++) {
+              const reward = nArr[by];
+              let bestPrev = -1e9;
+              let bestPy = by;
+              const pMin = Math.max(0, by - maxStepY);
+              const pMax = Math.min(bandH - 1, by + maxStepY);
+              for (let py = pMin; py <= pMax; py++) {
+                const diff = by - py;
+                const score = dp[s + 1][py] - stepPenalty * (diff * diff);
+                if (score > bestPrev) {
+                  bestPrev = score;
+                  bestPy = py;
+                }
+              }
+              dp[s][by] = bestPrev + reward;
+              back[s][by] = bestPy;
+            }
+          }
+
+          let curBy = 0;
+          let bestEnd = -1e9;
+          for (let by = 0; by < bandH; by++) {
+            if (dp[0][by] > bestEnd) {
+              bestEnd = dp[0][by];
+              curBy = by;
+            }
+          }
+          for (let s = 0; s <= s0; s++) {
+            const yInt = minY + curBy;
+            const cM = activeMap[s][yInt - 1] || 0;
+            const c0 = activeMap[s][yInt] || 0;
+            const cP = activeMap[s][yInt + 1] || 0;
+            const denom = 2 * (2 * c0 - cM - cP);
+            const sub = (denom > 1e-3 && c0 >= cM && c0 >= cP) ? Math.max(-0.5, Math.min(0.5, (cP - cM) / denom)) : 0;
+            rawY[s] = yInt + sub;
+            conf[s] = c0;
+            curBy = back[s][curBy];
+          }
+        }
+
+        let maxConf = 1;
+        for (let s = 0; s < Nx; s++) if (conf[s] > maxConf) maxConf = conf[s];
+        const activeThresh = maxConf * 0.07;
+        let firstActive = 0;
+        let lastActive = Nx - 1;
+        while (firstActive < Nx && conf[firstActive] < activeThresh) firstActive++;
+        while (lastActive >= 0 && conf[lastActive] < activeThresh) lastActive--;
+
+        if (lastActive - firstActive < Nx * 0.30) continue;
+
+        const leftSlope = clamp((rawY[firstActive] - rawY[Math.min(lastActive, firstActive + 3)]) / 3, -bestD * 0.3, bestD * 0.3);
+        for (let s = firstActive - 1; s >= 0; s--) {
+          const stepsOut = Math.min(2, firstActive - s);
+          rawY[s] = rawY[firstActive] + leftSlope * stepsOut;
+        }
+        const rightSlope = clamp((rawY[lastActive] - rawY[Math.max(firstActive, lastActive - 3)]) / 3, -bestD * 0.3, bestD * 0.3);
+        for (let s = lastActive + 1; s < Nx; s++) {
+          const stepsOut = Math.min(2, s - lastActive);
+          rawY[s] = rawY[lastActive] + rightSlope * stepsOut;
+        }
+
+        const smoothY = new Float32Array(Nx);
+        const smoothYNorm = new Float32Array(Nx);
+        for (let s = 0; s < Nx; s++) {
+          let wSum = 0;
+          let ySum = 0;
+          for (let k = -2; k <= 2; k++) {
+            let sampleY;
+            const idx = s + k;
+            if (idx < firstActive) {
+              const refl = Math.min(lastActive, 2 * firstActive - idx);
+              sampleY = 2 * rawY[firstActive] - rawY[refl];
+            } else if (idx > lastActive) {
+              const refl = Math.max(firstActive, 2 * lastActive - idx);
+              sampleY = 2 * rawY[lastActive] - rawY[refl];
+            } else {
+              sampleY = rawY[idx];
+            }
+            const gauss = Math.exp(-(k * k) / 1.8);
+            wSum += gauss;
+            ySum += sampleY * gauss;
+          }
+          smoothY[s] = ySum / wSum;
+          smoothYNorm[s] = smoothY[s] / height;
+        }
+
+        const activeVals = Array.from(smoothY.slice(firstActive, lastActive + 1)).sort((a, b) => a - b);
+        const targetY = activeVals[Math.floor(activeVals.length / 2)];
+        const targetYNorm = targetY / height;
+
+        let maxDev = 0;
+        for (let s = firstActive; s <= lastActive; s++) {
+          const dev = Math.abs(smoothY[s] - targetY);
+          if (dev > maxDev) maxDev = dev;
+        }
+
+        staves.push({
+          targetYNorm,
+          smoothYNorm,
+          firstActive,
+          lastActive,
+          maxDevNorm: maxDev / height,
+          maxDevPx: maxDev
+        });
+      }
+
+      if (staves.length >= 2) {
+        const firsts = staves.map(st => st.firstActive).sort((a, b) => a - b);
+        const lasts = staves.map(st => st.lastActive).sort((a, b) => b - a);
+        const sysFirst = firsts[Math.floor(firsts.length * 0.25)];
+        const sysLast = lasts[Math.floor(lasts.length * 0.25)];
+        for (const st of staves) {
+          if (st.firstActive > sysFirst && st.firstActive - sysFirst <= 6) st.firstActive = sysFirst;
+          if (st.lastActive < sysLast && sysLast - st.lastActive <= 6) st.lastActive = sysLast;
+        }
+      }
+
+      const maxPageWarpPx = staves.length > 0 ? Math.max(...staves.map(st => st.maxDevPx)) : 0;
+      return {
+        bestDNorm: bestD / height,
+        Nx,
+        xNorms,
+        staves,
+        maxPageWarpPx
+      };
+    }
+
+    function applyDewarpToCanvas(sourceCanvas, dewarpData, strengthPct = 100, horizUnrollPct = 60) {
+      const width = sourceCanvas.width;
+      const height = sourceCanvas.height;
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = width;
+      outCanvas.height = height;
+      const outCtx = outCanvas.getContext('2d', { willReadFrequently: true });
+
+      if (!dewarpData || !dewarpData.staves || dewarpData.staves.length === 0) {
+        outCtx.drawImage(sourceCanvas, 0, 0);
+        return outCanvas;
+      }
+
+      const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      const srcImgData = srcCtx.getImageData(0, 0, width, height);
+      const src = srcImgData.data;
+      const dstImgData = outCtx.createImageData(width, height);
+      const dst = dstImgData.data;
+      dst.fill(255);
+
+      const strength = strengthPct / 100;
+      const horizUnroll = horizUnrollPct / 100;
+      const { Nx, xNorms, staves } = dewarpData;
+      const xCenters = new Float32Array(Nx);
+      for (let s = 0; s < Nx; s++) xCenters[s] = xNorms[s] * width;
+
+      const sIdx0 = new Int32Array(width);
+      const sIdx1 = new Int32Array(width);
+      const sFrac = new Float32Array(width);
+      for (let x = 0; x < width; x++) {
+        if (x <= xCenters[0]) {
+          sIdx0[x] = 0; sIdx1[x] = 0; sFrac[x] = 0;
+        } else if (x >= xCenters[Nx - 1]) {
+          sIdx0[x] = Nx - 1; sIdx1[x] = Nx - 1; sFrac[x] = 0;
+        } else {
+          let s = 0;
+          while (s < Nx - 2 && xCenters[s + 1] < x) s++;
+          sIdx0[x] = s;
+          sIdx1[x] = s + 1;
+          sFrac[x] = (x - xCenters[s]) / Math.max(1e-3, xCenters[s + 1] - xCenters[s]);
+        }
+      }
+
+      const M = staves.length;
+      const targetYs = staves.map(st => st.targetYNorm * height);
+      const dyTable = staves.map(st => {
+        const arr = new Float32Array(Nx);
+        for (let s = 0; s < Nx; s++) {
+          arr[s] = (st.smoothYNorm[s] - st.targetYNorm) * height * strength;
+        }
+        return arr;
+      });
+
+      const dxTable = staves.map((st) => {
+        const arr = new Float32Array(Nx);
+        if (horizUnroll <= 0) return arr;
+        const sMid = Math.floor(Nx / 2);
+        const stepX = (xCenters[Nx - 1] - xCenters[0]) / (Nx - 1);
+        let accR = 0;
+        for (let s = sMid + 1; s < Nx; s++) {
+          const slope = ((st.smoothYNorm[s] - st.smoothYNorm[s - 1]) * height) / stepX;
+          const stretch = Math.min(0.08, 1.2 * slope * slope) * horizUnroll;
+          accR += stretch * stepX;
+          arr[s] = -accR;
+        }
+        let accL = 0;
+        for (let s = sMid - 1; s >= 0; s--) {
+          const slope = ((st.smoothYNorm[s + 1] - st.smoothYNorm[s]) * height) / stepX;
+          const stretch = Math.min(0.08, 1.2 * slope * slope) * horizUnroll;
+          accL += stretch * stepX;
+          arr[s] = accL;
+        }
+        return arr;
+      });
+
+      const yM0 = new Int32Array(height);
+      const yM1 = new Int32Array(height);
+      const yFrac = new Float32Array(height);
+      for (let y = 0; y < height; y++) {
+        if (M === 1 || y <= targetYs[0]) {
+          yM0[y] = 0; yM1[y] = 0; yFrac[y] = 0;
+        } else if (y >= targetYs[M - 1]) {
+          yM0[y] = M - 1; yM1[y] = M - 1; yFrac[y] = 0;
+        } else {
+          let m = 0;
+          while (m < M - 2 && targetYs[m + 1] < y) m++;
+          yM0[y] = m;
+          yM1[y] = m + 1;
+          yFrac[y] = (y - targetYs[m]) / Math.max(1, targetYs[m + 1] - targetYs[m]);
+        }
+      }
+
+      // Skip outer 0.6% raw scan border so dark scanner edge shadows are never pulled inward by dewarping
+      const minSrcX = width * 0.006;
+      const maxSrcX = width * 0.994 - 1;
+      const minSrcY = height * 0.006;
+      const maxSrcY = height * 0.994 - 1;
+
+      for (let y = 0; y < height; y++) {
+        const m0 = yM0[y];
+        const m1 = yM1[y];
+        const yf = yFrac[y];
+        const dyRow0 = dyTable[m0];
+        const dyRow1 = dyTable[m1];
+        const dxRow0 = dxTable[m0];
+        const dxRow1 = dxTable[m1];
+        const dstRowOff = y * width * 4;
+
+        for (let x = 0; x < width; x++) {
+          const s0 = sIdx0[x];
+          const s1 = sIdx1[x];
+          const sf = sFrac[x];
+
+          const dy0 = dyRow0[s0] + sf * (dyRow0[s1] - dyRow0[s0]);
+          const dy1 = dyRow1[s0] + sf * (dyRow1[s1] - dyRow1[s0]);
+          const dy = dy0 + yf * (dy1 - dy0);
+
+          const dx0 = dxRow0[s0] + sf * (dxRow0[s1] - dxRow0[s0]);
+          const dx1 = dxRow1[s0] + sf * (dxRow1[s1] - dxRow1[s0]);
+          const dx = dx0 + yf * (dx1 - dx0);
+
+          const srcX = x + dx;
+          const srcY = y + dy;
+
+          if (srcX >= minSrcX && srcX < maxSrcX && srcY >= minSrcY && srcY < maxSrcY) {
+            const x0 = srcX | 0;
+            const y0 = srcY | 0;
+            const fx = srcX - x0;
+            const fy = srcY - y0;
+            const w00 = (1 - fx) * (1 - fy);
+            const w10 = fx * (1 - fy);
+            const w01 = (1 - fx) * fy;
+            const w11 = fx * fy;
+
+            const i00 = (y0 * width + x0) * 4;
+            const i10 = i00 + 4;
+            const i01 = i00 + width * 4;
+            const i11 = i01 + 4;
+
+            const dIdx = dstRowOff + (x << 2);
+            dst[dIdx]     = (src[i00] * w00 + src[i10] * w10 + src[i01] * w01 + src[i11] * w11) + 0.5;
+            dst[dIdx + 1] = (src[i00 + 1] * w00 + src[i10 + 1] * w10 + src[i01 + 1] * w01 + src[i11 + 1] * w11) + 0.5;
+            dst[dIdx + 2] = (src[i00 + 2] * w00 + src[i10 + 2] * w10 + src[i01 + 2] * w01 + src[i11 + 2] * w11) + 0.5;
+            dst[dIdx + 3] = 255;
+          }
+        }
+      }
+
+      outCtx.putImageData(dstImgData, 0, 0);
+      return outCanvas;
+    }
+
+    // ============================================================================
+    // 4b. Music-Score-Aware Adaptive 1-Bit Binarization (Thin Staff Line Rescue)
+    //     - Uses a wide horizontal strip integral (~5% page width) so ONLY true
+    //       horizontal staff/ledger lines are rescued, never bloating lyrics or notes!
+    //     - In UI preview mode (isPreview = true), preserves sub-pixel anti-aliasing
+    //       along curves and text so the preview looks like a 600 DPI 1-bit print
+    //       viewed on a high-res monitor without any resolution drop or jaggedness.
+    //     - In PDF export mode (isPreview = false), produces true 1-bit (0 / 255)
+    //       at full 600 DPI / 300 DPI output resolution.
+    // ============================================================================
+    function binarizeScoreLumBuffer(lumBuf, w, h, preservePct = 80, isPreview = false) {
+      const out = new Uint8Array(w * h);
+      const strength = Math.max(0, Math.min(100, preservePct)) / 100;
+
+      // 1. Row-wise prefix sum for O(1) horizontal strip mean
+      const hRad = Math.max(8, Math.min(60, Math.round(w * 0.018)));
+      const rowPref = new Int32Array((w + 1) * h);
+      for (let y = 0; y < h; y++) {
+        const rOff = y * (w + 1);
+        const lOff = y * w;
+        let sum = 0;
+        for (let x = 0; x < w; x++) {
+          sum += lumBuf[lOff + x];
+          rowPref[rOff + x + 1] = sum;
+        }
+      }
+
+      const hMean = new Float32Array(w * h);
+      for (let y = 0; y < h; y++) {
+        const rOff = y * (w + 1);
+        const mOff = y * w;
+        for (let x = 0; x < w; x++) {
+          const x0 = Math.max(0, x - hRad);
+          const x1 = Math.min(w - 1, x + hRad);
+          hMean[mOff + x] = (rowPref[rOff + x1 + 1] - rowPref[rOff + x0]) / (x1 - x0 + 1);
+        }
+      }
+
+      const scaleFactor = Math.max(1, h / 1800);
+      const dNear = Math.max(1, Math.round(scaleFactor * 0.65));
+      const dMid  = Math.max(2, Math.round(scaleFactor * 1.5));
+      const dFar  = Math.max(3, Math.round(scaleFactor * 2.5));
+
+      const inkThresh = 165 + strength * 18;
+      const valleyThresh = 26 - strength * 22;
+      const valleyTol = 0.5 + strength * 3.0;
+
+      for (let y = 0; y < h; y++) {
+        const yU1 = Math.max(0, y - dNear), yU2 = Math.max(0, y - dMid), yU3 = Math.max(0, y - dFar);
+        const yD1 = Math.min(h - 1, y + dNear), yD2 = Math.min(h - 1, y + dMid), yD3 = Math.min(h - 1, y + dFar);
+        const rowOff = y * w;
+
+        for (let x = 0; x < w; x++) {
+          const idx = rowOff + x;
+          const pLum = lumBuf[idx];
+
+          const c = hMean[idx];
+          const u1 = hMean[yU1 * w + x], u2 = hMean[yU2 * w + x], u3 = hMean[yU3 * w + x];
+          const b1 = hMean[yD1 * w + x], b2 = hMean[yD2 * w + x], b3 = hMean[yD3 * w + x];
+
+          const bgUp = Math.max(u1, u2, u3);
+          const bgDn = Math.max(b1, b2, b3);
+          const horizValley = Math.min(bgUp - c, bgDn - c);
+          const minNeighbor = Math.min(u1, b1);
+
+          const isHorizLineZone = (horizValley >= 4.5 && c <= minNeighbor + 3.2 && pLum > 155);
+
+          let effLum = pLum;
+          if (strength > 0.01 && horizValley >= valleyThresh && c <= minNeighbor + valleyTol && pLum < Math.min(bgUp, bgDn) - 2) {
+            const centerProximity = Math.max(0.35, 1 - Math.max(0, c - minNeighbor) / (valleyTol + 0.5));
+            const boost = horizValley * (strength * 5.2) * centerProximity;
+            effLum = Math.max(0, pLum - boost);
+          }
+
+          if (!isPreview) {
+            // True 1-bit (0 or 255) for high-DPI (600 DPI / 300 DPI) PDF export
+            out[idx] = effLum < inkThresh ? 0 : 255;
+          } else if (isHorizLineZone) {
+            // On horizontal staff lines, apply crisp 1-bit cutoff so dragging 0%..100% directly shows staff line rescue!
+            const lowL = inkThresh - 18;
+            const highL = inkThresh + 14;
+            if (effLum <= lowL) out[idx] = 0;
+            else if (effLum >= highL) out[idx] = 255;
+            else {
+              const t = (effLum - lowL) / (highL - lowL);
+              out[idx] = Math.round(255 * (t * t * (3 - 2 * t)));
+            }
+          } else {
+            // On Korean lyrics, clefs, and noteheads, preserve full sub-pixel anti-aliasing so preview quality stays HD!
+            const lowL = 108;
+            const highL = 230;
+            if (effLum <= lowL) out[idx] = 0;
+            else if (effLum >= highL) out[idx] = 255;
+            else {
+              const t = (effLum - lowL) / (highL - lowL);
+              out[idx] = Math.round(255 * Math.pow(t, 1.35));
+            }
+          }
+        }
+      }
+      return out;
+    }
+
+    function getPageTransformCacheKey(pageObj) {
+      const maskC = document.getElementById('chkMaskCorners')?.checked ? 1 : 0;
+      const dwKey = pageObj.dewarp ? `${pageObj.dewarp.enabled ? 1 : 0}_${pageObj.dewarp.strength}_${pageObj.dewarp.horizUnroll}_${pageObj.dewarp.data ? pageObj.dewarp.data.staves.length : 0}` : '0';
+      return `${dwKey}_${pageObj.skewDeg}_${pageObj.filters.whiteLevel}_${pageObj.filters.contrast}_${pageObj.filters.binarize}_${pageObj.filters.linePreserve ?? 80}_${maskC}`;
+    }
+
+    function createTransformedCanvas(pageObj, sourceCanvas = pageObj.workCanvas, options = {}) {
+      const isWorkCanvas = (sourceCanvas === pageObj.workCanvas && !options.skipBinarize);
+      const fullKey = isWorkCanvas ? getPageTransformCacheKey(pageObj) : null;
+      if (isWorkCanvas && pageObj._transKey === fullKey && pageObj._transCanvas) {
+        return pageObj._transCanvas;
+      }
+
+      // 1. Apply Non-Uniform Staff-Line Dewarp (Unroll) if enabled on this page
+      let baseCanvas = sourceCanvas;
+      if (pageObj.dewarp && pageObj.dewarp.enabled && pageObj.dewarp.data) {
+        const dwOnlyKey = `${pageObj.dewarp.enabled ? 1 : 0}_${pageObj.dewarp.strength}_${pageObj.dewarp.horizUnroll}_${pageObj.dewarp.data.staves.length}`;
+        if (isWorkCanvas && pageObj._dwKey === dwOnlyKey && pageObj._dwCanvas) {
+          baseCanvas = pageObj._dwCanvas;
+        } else {
+          baseCanvas = applyDewarpToCanvas(
+            sourceCanvas,
+            pageObj.dewarp.data,
+            pageObj.dewarp.strength,
+            pageObj.dewarp.horizUnroll
+          );
+          if (isWorkCanvas) {
+            pageObj._dwKey = dwOnlyKey;
+            pageObj._dwCanvas = baseCanvas;
+          }
+        }
+      }
+
+      const w = baseCanvas.width;
+      const h = baseCanvas.height;
       const out = document.createElement('canvas');
       out.width = w;
       out.height = h;
@@ -1242,15 +2002,15 @@
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, w, h);
 
-      // Apply fine rotation around center
+      // 2. Apply fine rotation around center
       if (Math.abs(pageObj.skewDeg) > 0.001) {
         ctx.save();
         ctx.translate(w / 2, h / 2);
         ctx.rotate((pageObj.skewDeg * Math.PI) / 180);
-        ctx.drawImage(sourceCanvas, -w / 2, -h / 2);
+        ctx.drawImage(baseCanvas, -w / 2, -h / 2);
         ctx.restore();
       } else {
-        ctx.drawImage(sourceCanvas, 0, 0);
+        ctx.drawImage(baseCanvas, 0, 0);
       }
 
       // Optional: Mask out top/bottom outer corner page numbers if enabled
@@ -1261,9 +2021,10 @@
         ctx.fillRect(Math.round(w * 0.888), 0, Math.round(w * 0.112), Math.round(h * 0.055));
       }
 
-      // Apply pixel filters (White point cleanup, contrast, optional binarization)
-      const { whiteLevel, contrast, binarize } = pageObj.filters;
-      if (whiteLevel < 255 || contrast !== 100 || binarize) {
+      // Apply pixel filters (White point cleanup, contrast, optional staff-preserving 1-bit binarization)
+      const { whiteLevel, contrast, binarize, linePreserve } = pageObj.filters;
+      const doBinarize = binarize && !options.skipBinarize;
+      if (whiteLevel < 255 || contrast !== 100 || doBinarize) {
         const imgData = ctx.getImageData(0, 0, w, h);
         const data = imgData.data;
         const cFactor = contrast / 100;
@@ -1275,37 +2036,45 @@
           } else {
             let norm = (v / whiteLevel) * 255;
             norm = (norm - 128) * cFactor + 128;
-            if (binarize) {
-              lut[v] = norm < 165 ? 0 : 255;
-            } else {
-              lut[v] = Math.max(0, Math.min(255, Math.round(norm)));
-            }
+            lut[v] = Math.max(0, Math.min(255, Math.round(norm)));
           }
         }
 
-        for (let i = 0; i < data.length; i += 4) {
-          const lum = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
-          const val = lut[lum];
-          data[i] = val;
-          data[i + 1] = val;
-          data[i + 2] = val;
+        if (doBinarize) {
+          const lumBuf = new Uint8Array(w * h);
+          for (let i = 0, pIdx = 0; i < data.length; i += 4, pIdx++) {
+            const lum = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+            lumBuf[pIdx] = lut[lum];
+          }
+          const binBuf = binarizeScoreLumBuffer(lumBuf, w, h, linePreserve ?? 80, isWorkCanvas);
+          for (let i = 0, pIdx = 0; i < data.length; i += 4, pIdx++) {
+            const val = binBuf[pIdx];
+            data[i] = val;
+            data[i + 1] = val;
+            data[i + 2] = val;
+          }
+        } else {
+          for (let i = 0; i < data.length; i += 4) {
+            const lum = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+            const val = lut[lum];
+            data[i] = val;
+            data[i + 1] = val;
+            data[i + 2] = val;
+          }
         }
         ctx.putImageData(imgData, 0, 0);
       }
 
+      if (isWorkCanvas) {
+        pageObj._transKey = fullKey;
+        pageObj._transCanvas = out;
+      }
       return out;
     }
 
     function getActiveTransformedCanvas() {
       const p = pagesData[currentPageIdx];
-      const maskC = document.getElementById('chkMaskCorners')?.checked ? 1 : 0;
-      const key = `${p.skewDeg}_${p.filters.whiteLevel}_${p.filters.contrast}_${p.filters.binarize}_${maskC}`;
-      if (cachedTransformed.pageIdx === currentPageIdx && cachedTransformed.key === key && cachedTransformed.canvas) {
-        return cachedTransformed.canvas;
-      }
-      const c = createTransformedCanvas(p);
-      cachedTransformed = { pageIdx: currentPageIdx, key, canvas: c };
-      return c;
+      return createTransformedCanvas(p);
     }
 
     function onMaskCornersChange() {
@@ -1324,8 +2093,9 @@
       const data = ctx.getImageData(0, 0, w, h).data;
 
       const sensitivity = parseInt(document.getElementById('rngSensitivity').value, 10) || 25;
-      const edgeSkipX = Math.round(w * 0.004);
-      const edgeSkipY = Math.round(h * 0.004);
+      const edgeSkipX = Math.round(w * 0.008);
+      const edgeSkipY = Math.round(h * 0.008);
+      const resScale = Math.max(1.0, h / 1200);
 
       function isCornerZone(x, y) {
         const nx = x / w;
@@ -1341,7 +2111,7 @@
       const isInk = new Uint8Array(w * h);
       const satW = w + 1;
       const sat = new Int32Array(satW * (h + 1));
-      const darkThreshold = 205;
+      const darkThreshold = 200;
 
       for (let y = edgeSkipY; y < h - edgeSkipY; y++) {
         const rowOffset = y * w * 4;
@@ -1360,11 +2130,11 @@
         }
       }
 
-      const R = 6;
-      const minClusterPixels = Math.max(3, Math.round(sensitivity / 3));
+      const R = Math.max(6, Math.round(6 * resScale));
+      const minClusterPixels = Math.max(5, Math.round((sensitivity / 2.6) * resScale * resScale));
+      const minCornerPixels = Math.max(12, Math.round(minClusterPixels * 1.6));
 
       // Vertical middle band [7.5% .. 91.5%] strictly contains the music staves & barlines
-      // (excludes top/bottom corner page numbers like "14", "15".."23" and bottom copyright lines)
       const staffBandYMin = Math.round(h * 0.075);
       const staffBandYMax = Math.round(h * 0.915);
 
@@ -1378,8 +2148,8 @@
 
       let fullTopPx = h - edgeSkipY;
       let fullBottomPx = edgeSkipY;
-      let fullLeftPx = w - edgeSkipX;
-      let fullRightPx = edgeSkipX;
+      let cornerLeftPx = w - edgeSkipX;
+      let cornerRightPx = edgeSkipX;
 
       let foundAny = false;
       const staffColInk = new Int32Array(w);
@@ -1401,31 +2171,31 @@
 
           if (neighbors >= minClusterPixels) {
             foundAny = true;
-            if (x < fullLeftPx) fullLeftPx = x;
-            if (x > fullRightPx) fullRightPx = x;
-            if (y < fullTopPx) fullTopPx = y;
-            if (y > fullBottomPx) fullBottomPx = y;
-
             if (inStaffBand) {
               staffColInk[x]++;
             }
 
-            if (!isCornerZone(x, y)) {
+            if (isCornerZone(x, y)) {
+              if (neighbors >= minCornerPixels) {
+                if (x < cornerLeftPx) cornerLeftPx = x;
+                if (x > cornerRightPx) cornerRightPx = x;
+                if (y < fullTopPx) fullTopPx = y;
+                if (y > fullBottomPx) fullBottomPx = y;
+              }
+            } else {
               if (x < noCornerLeftPx) noCornerLeftPx = x;
               if (x > noCornerRightPx) noCornerRightPx = x;
               if (y < noCornerTopPx) noCornerTopPx = y;
               if (y > noCornerBottomPx) noCornerBottomPx = y;
+              if (y < fullTopPx) fullTopPx = y;
+              if (y > fullBottomPx) fullBottomPx = y;
             }
           }
         }
       }
 
       // Robust Staff Right/Left Barline detection:
-      // Music staves have multiple horizontal lines + vertical barlines,
-      // so real staff ends have significant vertical ink in the column (>= minBarlineInk).
-      // This filters out stray dust or smudges in the right margin.
-      // If confineToCrop is true, search strictly inside the existing right crop boundary!
-      const minBarlineInk = Math.max(4, Math.round(sensitivity / 4));
+      const minBarlineInk = Math.max(8, Math.round((sensitivity / 3.2) * resScale));
       let foundStaffRight = false;
       const maxSearchRightPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.right === 'number' && pageObj.crop.right > 0)
         ? Math.min(w - edgeSkipX - 1, Math.round((1 - pageObj.crop.right) * w))
@@ -1440,7 +2210,10 @@
       }
 
       let foundStaffLeft = false;
-      for (let x = edgeSkipX; x <= Math.min(scoreRightPx - 50, Math.round(w * 0.65)); x++) {
+      const minSearchLeftPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.left === 'number' && pageObj.crop.left > 0)
+        ? Math.max(edgeSkipX, Math.round(pageObj.crop.left * w))
+        : edgeSkipX;
+      for (let x = minSearchLeftPx; x <= Math.min(scoreRightPx - 50, Math.round(w * 0.65)); x++) {
         const colDensity = staffColInk[x] + (staffColInk[x - 1] || 0) + (staffColInk[x + 1] || 0);
         if (colDensity >= minBarlineInk) {
           scoreLeftPx = x;
@@ -1468,6 +2241,11 @@
         scoreLeftPx = noCornerLeftPx;
       }
 
+      // Horizontal full bounds combine the music system [scoreLeftPx..scoreRightPx] with any real corner page numbers,
+      // ignoring isolated pepper-noise specks in the middle margins!
+      const fullLeftPx = Math.min(scoreLeftPx, cornerLeftPx);
+      const fullRightPx = Math.max(scoreRightPx, cornerRightPx);
+
       const bounds = {
         scoreLeft: round4(scoreLeftPx / w),
         scoreRight: round4(scoreRightPx / w),
@@ -1490,9 +2268,8 @@
       return bounds;
     }
 
-    // Applies auto-crop so that on EVERY page, the right crop boundary is at the
-    // exact same distance from the detected music score's right edge (scoreRight),
-    // whether corner page numbers are included or ignored.
+    // Applies auto-crop tightly to each page's own detected score & corner bounds + Auto-Crop Padding,
+    // without inflating pages by opposite-side page numbers or specks from other pages!
     function applyUniformScoreRightCropToPages(singlePageIdx = null) {
       if (pagesData.length === 0) return;
 
@@ -1505,38 +2282,19 @@
         if (!pagesData[i].rawBounds) analyzePageInkBounds(pagesData[i], false);
       }
 
-      // When corner page numbers are included (!ignoreCorners), measure the maximum distance
-      // that any corner page number sticks out beyond scoreRight / scoreLeft across the document,
-      // so every page uses the exact same offset from scoreRight without ever clipping corner numbers!
-      let uniformRightOutset = 0;
-      let uniformLeftOutset = 0;
-      if (!ignoreCorners) {
-        for (let i = 0; i < pagesData.length; i++) {
-          const b = pagesData[i].rawBounds;
-          const sr = typeof pagesData[i].scoreRight === 'number' ? pagesData[i].scoreRight : b.scoreRight;
-          const rOut = Math.max(0, b.fullRight - sr);
-          const lOut = Math.max(0, b.scoreLeft - b.fullLeft);
-          if (rOut > uniformRightOutset) uniformRightOutset = rOut;
-          if (lOut > uniformLeftOutset) uniformLeftOutset = lOut;
-        }
-      }
-
-      const rightOffsetFromScore = uniformRightOutset + padPct;
-      const leftOffsetFromScore = uniformLeftOutset + padPct;
-
       const indices = singlePageIdx !== null ? [singlePageIdx] : pagesData.map((_, idx) => idx);
       for (const idx of indices) {
         const p = pagesData[idx];
         const b = p.rawBounds;
         const sr = typeof p.scoreRight === 'number' ? p.scoreRight : b.scoreRight;
 
-        // Right edge is ALWAYS cropped at the uniform offset from the music score's right edge (sr)
-        const rightEdgeNorm = Math.min(0.999, sr + rightOffsetFromScore);
-        const leftEdgeNorm = Math.max(0.001, b.scoreLeft - leftOffsetFromScore);
-
+        const leftInkNorm = ignoreCorners ? b.scoreLeft : Math.min(b.scoreLeft, b.fullLeft);
+        const rightInkNorm = ignoreCorners ? sr : Math.max(sr, b.fullRight);
         const topInkNorm = ignoreCorners ? b.noCornerTop : b.fullTop;
         const bottomInkNorm = ignoreCorners ? b.noCornerBottom : b.fullBottom;
 
+        const leftEdgeNorm = Math.max(0.001, leftInkNorm - padPct);
+        const rightEdgeNorm = Math.min(0.999, rightInkNorm + padPct);
         const topEdgeNorm = Math.max(0.001, topInkNorm - padPct);
         const bottomEdgeNorm = Math.min(0.999, bottomInkNorm + padPct);
 
@@ -1693,6 +2451,111 @@
       showToast('Unified crop dimensions across all pages anchored to the score right edge!');
     }
 
+    function autoDewarpCurrentPage() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      if (!p.dewarp.data) {
+        p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
+      }
+      p.dewarp.enabled = true;
+      document.getElementById('chkShowStaffOverlay').checked = true;
+      cachedTransformed.pageIdx = -1;
+      computeAutoCropForPage(p);
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      const nStaves = p.dewarp.data.staves.length;
+      const maxPx = p.dewarp.data.maxPageWarpPx.toFixed(1);
+      showToast(`🌊 Page ${currentPageIdx + 1} unrolled! (${nStaves} staves straightened, max curve ${maxPx}px → flat)`);
+    }
+
+    async function autoDewarpAllPages() {
+      if (!pdfDoc) return;
+      showProgress('🌊 Unrolling Curved Staff Lines Across All Pages...', '', 8);
+      await sleep(25);
+      for (let i = 0; i < pagesData.length; i++) {
+        const p = pagesData[i];
+        showProgress('🌊 Unrolling Curved Staff Lines Across All Pages...', `Tracking & straightening staves on Page ${i + 1} of ${pagesData.length}`, Math.round(((i + 1) / pagesData.length) * 88));
+        await sleep(15);
+        if (!p.dewarp.data) {
+          p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
+        }
+        p.dewarp.enabled = true;
+        analyzePageInkBounds(p);
+      }
+      document.getElementById('chkShowStaffOverlay').checked = true;
+      applyUniformScoreRightCropToPages();
+      for (let i = 0; i < pagesData.length; i++) {
+        drawThumbnail(i);
+      }
+      cachedTransformed.pageIdx = -1;
+      syncInspectorFromPage();
+      renderActiveView();
+      hideProgress();
+      showToast(`🌊 All ${pagesData.length} pages unrolled and auto-cropped to straightened staves!`);
+    }
+
+    function onToggleDewarpEnabled(checked) {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      if (checked && !p.dewarp.data) {
+        p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
+      }
+      p.dewarp.enabled = checked;
+      cachedTransformed.pageIdx = -1;
+      p.rawBounds = null;
+      analyzePageInkBounds(p, true);
+      const maxSr = round4(1 - p.crop.right);
+      const minSr = round4(p.crop.left + 0.02);
+      p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      showToast(`⚓ Right score end auto-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
+    }
+
+    function onToggleStaffOverlay(checked) {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      if (checked && !p.dewarp.data) {
+        p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
+      }
+      syncInspectorFromPage();
+      renderActiveView();
+    }
+
+    function onDewarpSliderChange() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      const strength = parseInt(document.getElementById('rngDewarpStrength').value, 10) || 0;
+      const horiz = parseInt(document.getElementById('rngHorizUnroll').value, 10) || 0;
+      p.dewarp.strength = strength;
+      p.dewarp.horizUnroll = horiz;
+      document.getElementById('valDewarpStrength').textContent = `${strength}%`;
+      document.getElementById('valHorizUnroll').textContent = `${horiz}%`;
+      if (!p.dewarp.data) {
+        p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
+      }
+      p.dewarp.enabled = true;
+      document.getElementById('chkDewarpEnabled').checked = true;
+      cachedTransformed.pageIdx = -1;
+      isInteracting = true;
+      renderActiveView();
+      clearTimeout(window._dewarpTimer);
+      window._dewarpTimer = setTimeout(() => {
+        isInteracting = false;
+        p.rawBounds = null;
+        analyzePageInkBounds(p, true);
+        const maxSr = round4(1 - p.crop.right);
+        const minSr = round4(p.crop.left + 0.02);
+        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
+        syncInspectorFromPage();
+        drawThumbnail(currentPageIdx);
+        renderActiveView();
+        showToast(`⚓ Right score end re-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
+      }, 280);
+    }
+
     function autoDeskewCurrentPage() {
       if (!pdfDoc) return;
       const p = pagesData[currentPageIdx];
@@ -1702,7 +2565,7 @@
       syncInspectorFromPage();
       drawThumbnail(currentPageIdx);
       renderActiveView();
-      showToast(`Page ${currentPageIdx + 1} auto-deskewed (${p.skewDeg.toFixed(2)}°).`);
+      showToast(`Page ${currentPageIdx + 1} auto-deskewed (${p.skewDeg.toFixed(2)}°) · ⚓ Right end: ${(p.scoreRight * 100).toFixed(1)}%`);
     }
 
     async function autoDeskewAllPages() {
@@ -1808,6 +2671,8 @@
       const H = editorCanvas.height;
 
       // 1. Draw full transformed page
+      editorCtx.imageSmoothingEnabled = true;
+      editorCtx.imageSmoothingQuality = 'high';
       editorCtx.drawImage(transCanvas, 0, 0, W, H);
 
       // 2. Darken outside crop box
@@ -1842,6 +2707,40 @@
       editorCtx.moveTo(gxMid, cy1);
       editorCtx.lineTo(gxMid, cy2);
       editorCtx.stroke();
+
+      // 3b. Draw Detected Staff Curves & Straightened Horizontal Ruler Overlay if enabled
+      const showStaffOverlay = document.getElementById('chkShowStaffOverlay')?.checked;
+      if (showStaffOverlay && p.dewarp && p.dewarp.data && p.dewarp.data.staves) {
+        const { Nx, xNorms, staves } = p.dewarp.data;
+        const isUnrolled = p.dewarp.enabled;
+        for (const st of staves) {
+          const targetY = st.targetYNorm * H;
+          const xStart = xNorms[st.firstActive] * W;
+          const xEnd = xNorms[st.lastActive] * W;
+
+          // Draw horizontal target ruler line (emerald when unrolled, cyan dashed when viewing original warped)
+          editorCtx.setLineDash(isUnrolled ? [] : [4, 4]);
+          editorCtx.strokeStyle = isUnrolled ? 'rgba(16, 185, 129, 0.78)' : 'rgba(56, 189, 248, 0.75)';
+          editorCtx.lineWidth = isUnrolled ? 1.6 : 1.2;
+          editorCtx.beginPath();
+          editorCtx.moveTo(xStart, targetY);
+          editorCtx.lineTo(xEnd, targetY);
+          editorCtx.stroke();
+
+          // Draw original detected warped staff trajectory (solid red when unrolled=false, faint dotted red when unrolled=true)
+          editorCtx.setLineDash(isUnrolled ? [2, 3] : []);
+          editorCtx.strokeStyle = isUnrolled ? 'rgba(239, 68, 68, 0.45)' : 'rgba(239, 68, 68, 0.92)';
+          editorCtx.lineWidth = isUnrolled ? 1.2 : 2.2;
+          editorCtx.beginPath();
+          for (let s = st.firstActive; s <= st.lastActive; s++) {
+            const xx = xNorms[s] * W;
+            const yy = st.smoothYNorm[s] * H;
+            if (s === st.firstActive) editorCtx.moveTo(xx, yy);
+            else editorCtx.lineTo(xx, yy);
+          }
+          editorCtx.stroke();
+        }
+      }
 
       // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badges)
       // Strictly confined inside the user's adjusted crop box [cx1..cx2] and [cy1..cy2]
@@ -1941,7 +2840,7 @@
       const startPageNum = parseInt(document.getElementById('numStartPage').value, 10) || 1;
 
       // Compute document-wide horizontal envelope relative to each page's music score right edge (p.scoreRight)
-      // so that when placed on the target page, p.scoreRight lands at the EXACT same X coordinate on all pages!
+      // so that when placed on the target page, p.scoreRight (the orange anchor line) lands at the EXACT same X coordinate on all pages!
       let maxLeftFromScoreRightPt = 100;
       let maxRightFromScoreRightPt = 0;
       let refScoreWidthPt = 100;
@@ -1967,8 +2866,8 @@
         scoreWidths.sort((a, b) => a - b);
         refScoreWidthPt = scoreWidths[Math.floor(scoreWidths.length / 2)];
 
-        const totalEnvelopePtW = maxLeftFromScoreRightPt + maxRightFromScoreRightPt;
-        let minRatio = Infinity;
+        const totalEnvelopePtW = Math.max(10, maxLeftFromScoreRightPt + maxRightFromScoreRightPt);
+        const pageRatios = [];
 
         for (let i = 0; i < pagesData.length; i++) {
           const p = pagesData[i];
@@ -1978,11 +2877,11 @@
           const availW = Math.max(20, paper.widthMm - effLeft - effRight);
           const availH = Math.max(20, paper.heightMm - mTop - mBottom);
 
-          const cropPtH = p.origHeight * (1 - p.crop.top - p.crop.bottom);
-          const ratio = Math.min(availW / totalEnvelopePtW, availH / cropPtH);
-          if (ratio < minRatio) minRatio = ratio;
+          const cropPtH = Math.max(10, p.origHeight * (1 - p.crop.top - p.crop.bottom));
+          pageRatios.push(Math.min(availW / totalEnvelopePtW, availH / cropPtH));
         }
-        uniformMmPerPt = minRatio;
+        pageRatios.sort((a, b) => a - b);
+        uniformMmPerPt = pageRatios[0];
       }
 
       return {
@@ -2003,11 +2902,11 @@
     }
 
     // Computes exact placement on the target paper for pageIdx so that the music score's
-    // right edge (p.scoreRight) is locked at the exact same horizontal X position across all pages!
+    // right edge (p.scoreRight, orange dashed line) is locked at the EXACT same horizontal X position across all pages!
     function computePageTargetPlacement(pageIdx, spec) {
       const {
         paper, scaleMode, mTop, mBottom, mLeft, mRight, gutterMm,
-        uniformMmPerPt, maxLeftFromScoreRightPt, maxRightFromScoreRightPt, refScoreWidthPt
+        uniformMmPerPt, maxLeftFromScoreRightPt, maxRightFromScoreRightPt
       } = spec;
 
       const p = pagesData[pageIdx];
@@ -2018,9 +2917,9 @@
       const availWMm = Math.max(10, paper.widthMm - effLeftMm - effRightMm);
       const availHMm = Math.max(10, paper.heightMm - mTop - mBottom);
 
-      const cropPtW = p.origWidth * (1 - p.crop.left - p.crop.right);
-      const cropPtH = p.origHeight * (1 - p.crop.top - p.crop.bottom);
-      const totalEnvelopePtW = maxLeftFromScoreRightPt + maxRightFromScoreRightPt;
+      const cropPtW = Math.max(10, p.origWidth * (1 - p.crop.left - p.crop.right));
+      const cropPtH = Math.max(10, p.origHeight * (1 - p.crop.top - p.crop.bottom));
+      const totalEnvelopePtW = Math.max(10, maxLeftFromScoreRightPt + maxRightFromScoreRightPt);
 
       const scaleMmPerPt = (scaleMode === 'uniform')
         ? uniformMmPerPt
@@ -2029,18 +2928,13 @@
       const drawWMm = cropPtW * scaleMmPerPt;
       const drawHMm = cropPtH * scaleMmPerPt;
 
-      // Center the music score body [scoreLeft .. scoreRight] on the target paper,
-      // and clamp slightly if needed so neither left nor right corner page numbers exceed margins.
-      const scoreBodyWMm = refScoreWidthPt * scaleMmPerPt;
-      let targetScoreRightXMm = effLeftMm + (availWMm + scoreBodyWMm) / 2;
-
-      const minScoreRightXMm = effLeftMm + maxLeftFromScoreRightPt * scaleMmPerPt;
-      const maxScoreRightXMm = effLeftMm + availWMm - maxRightFromScoreRightPt * scaleMmPerPt;
-      if (minScoreRightXMm <= maxScoreRightXMm) {
-        targetScoreRightXMm = clamp(targetScoreRightXMm, minScoreRightXMm, maxScoreRightXMm);
-      } else {
-        targetScoreRightXMm = (minScoreRightXMm + maxScoreRightXMm) / 2;
-      }
+      // Lock the orange Score Right Anchor line at a fixed horizontal coordinate across all pages
+      // so left-side page numbers (e.g. 136) sit to the left of the score and right-side page numbers (e.g. 137)
+      // sit to the right of the orange line without ever shifting the score horizontally!
+      const envLeftMm = maxLeftFromScoreRightPt * scaleMmPerPt;
+      const envRightMm = maxRightFromScoreRightPt * scaleMmPerPt;
+      const totalEnvMm = envLeftMm + envRightMm;
+      const targetScoreRightXMm = effLeftMm + (availWMm - totalEnvMm) / 2 + envLeftMm;
 
       const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
       const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
@@ -2368,18 +3262,24 @@
     // ============================================================================
     // 8. Inspector Controls Binding & Synchronization
     // ============================================================================
+    function setInputValIfNotFocused(id, val) {
+      const el = document.getElementById(id);
+      if (el && document.activeElement !== el) {
+        el.value = val;
+      }
+    }
+
     function syncInspectorFromPage() {
       if (!pdfDoc || !pagesData[currentPageIdx]) return;
       const p = pagesData[currentPageIdx];
 
-      document.getElementById('numCropTop').value = (p.crop.top * 100).toFixed(1);
-      document.getElementById('numCropBottom').value = (p.crop.bottom * 100).toFixed(1);
-      document.getElementById('numCropLeft').value = (p.crop.left * 100).toFixed(1);
-      document.getElementById('numCropRight').value = (p.crop.right * 100).toFixed(1);
+      setInputValIfNotFocused('numCropTop', (p.crop.top * 100).toFixed(1));
+      setInputValIfNotFocused('numCropBottom', (p.crop.bottom * 100).toFixed(1));
+      setInputValIfNotFocused('numCropLeft', (p.crop.left * 100).toFixed(1));
+      setInputValIfNotFocused('numCropRight', (p.crop.right * 100).toFixed(1));
 
       if (typeof p.scoreRight === 'number') {
-        const srEl = document.getElementById('numScoreRight');
-        if (srEl) srEl.value = (p.scoreRight * 100).toFixed(1);
+        setInputValIfNotFocused('numScoreRight', (p.scoreRight * 100).toFixed(1));
       }
 
       document.getElementById('rngSkew').value = p.skewDeg;
@@ -2392,6 +3292,41 @@
       document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
 
       document.getElementById('chkBinarize').checked = p.filters.binarize;
+      const lp = p.filters.linePreserve ?? 80;
+      const lpEl = document.getElementById('rngLinePreserve');
+      if (lpEl) {
+        lpEl.value = lp;
+        lpEl.disabled = !p.filters.binarize;
+      }
+      const lpValEl = document.getElementById('valLinePreserve');
+      if (lpValEl) lpValEl.textContent = `${lp}%`;
+      const wrapLp = document.getElementById('wrapLinePreserve');
+      if (wrapLp) {
+        wrapLp.style.opacity = p.filters.binarize ? '1' : '0.38';
+        wrapLp.style.pointerEvents = p.filters.binarize ? 'auto' : 'none';
+      }
+
+      if (p.dewarp) {
+        document.getElementById('chkDewarpEnabled').checked = !!p.dewarp.enabled;
+        document.getElementById('rngDewarpStrength').value = p.dewarp.strength;
+        document.getElementById('valDewarpStrength').textContent = `${p.dewarp.strength}%`;
+        document.getElementById('rngHorizUnroll').value = p.dewarp.horizUnroll;
+        document.getElementById('valHorizUnroll').textContent = `${p.dewarp.horizUnroll}%`;
+        const badge = document.getElementById('dewarpStatusBadge');
+        if (p.dewarp.enabled && p.dewarp.data) {
+          badge.textContent = `Active · ${p.dewarp.data.staves.length} staves`;
+          badge.style.color = '#6ee7b7';
+          badge.style.borderColor = '#10b981';
+        } else if (p.dewarp.data) {
+          badge.textContent = `Ready (${p.dewarp.data.staves.length} staves)`;
+          badge.style.color = '#38bdf8';
+          badge.style.borderColor = '#0284c7';
+        } else {
+          badge.textContent = 'Off';
+          badge.style.color = '#94a3b8';
+          badge.style.borderColor = '#334155';
+        }
+      }
     }
 
     function onManualScoreRightChange(val) {
@@ -2402,8 +3337,7 @@
       const maxSr = round4(1 - p.crop.right);
       const minSr = round4(p.crop.left + 0.02);
       p.scoreRight = round4(clamp(parsed / 100, minSr, maxSr));
-      const srEl = document.getElementById('numScoreRight');
-      if (srEl) srEl.value = (p.scoreRight * 100).toFixed(1);
+      setInputValIfNotFocused('numScoreRight', (p.scoreRight * 100).toFixed(1));
       drawThumbnail(currentPageIdx);
       renderActiveView();
     }
@@ -2510,6 +3444,7 @@
         p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
         syncInspectorFromPage();
         renderActiveView();
+        showToast(`⚓ Right score end re-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
       }, 350);
     }
 
@@ -2519,6 +3454,18 @@
       p.filters.whiteLevel = parseInt(document.getElementById('rngWhiteLevel').value, 10);
       p.filters.contrast = parseInt(document.getElementById('rngContrast').value, 10);
       p.filters.binarize = document.getElementById('chkBinarize').checked;
+      const lpEl = document.getElementById('rngLinePreserve');
+      if (lpEl) {
+        p.filters.linePreserve = parseInt(lpEl.value, 10);
+        lpEl.disabled = !p.filters.binarize;
+        const lpValEl = document.getElementById('valLinePreserve');
+        if (lpValEl) lpValEl.textContent = `${p.filters.linePreserve}%`;
+      }
+      const wrapLp = document.getElementById('wrapLinePreserve');
+      if (wrapLp) {
+        wrapLp.style.opacity = p.filters.binarize ? '1' : '0.38';
+        wrapLp.style.pointerEvents = p.filters.binarize ? 'auto' : 'none';
+      }
 
       document.getElementById('valWhiteLevel').textContent = p.filters.whiteLevel === 255 ? '255 (Off)' : p.filters.whiteLevel;
       document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
@@ -2561,11 +3508,16 @@
         }
       }
       applyUniformScoreRightCropToPages();
-      for (let i = 0; i < pagesData.length; i++) {
-        drawThumbnail(i);
-      }
+      drawThumbnail(currentPageIdx);
       syncInspectorFromPage();
       renderActiveView();
+
+      clearTimeout(window._thumbBatchTimer);
+      window._thumbBatchTimer = setTimeout(() => {
+        for (let i = 0; i < pagesData.length; i++) {
+          if (i !== currentPageIdx) drawThumbnail(i);
+        }
+      }, 120);
     }
 
     function setEqualOutputMargins() {
@@ -2621,23 +3573,30 @@
       return new Uint8Array(ab);
     }
 
-    async function packCanvasTo1BitFlateImage(pdfLibDoc, canvas) {
+    async function packCanvasTo1BitFlateImage(pdfLibDoc, canvas, pageObj = null) {
       const w = canvas.width;
       const h = canvas.height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       const rgba = ctx.getImageData(0, 0, w, h).data;
 
+      // Extract luminance and run Music-Score-Aware Adaptive 1-Bit Binarization
+      // so thin or light-gray staff lines are rescued at the exact output DPI!
+      const lumBuf = new Uint8Array(w * h);
+      for (let i = 0, pIdx = 0; i < rgba.length; i += 4, pIdx++) {
+        lumBuf[pIdx] = (rgba[i] * 77 + rgba[i + 1] * 150 + rgba[i + 2] * 29) >> 8;
+      }
+      const preservePct = pageObj && pageObj.filters ? (pageObj.filters.linePreserve ?? 80) : 80;
+      const binBuf = binarizeScoreLumBuffer(lumBuf, w, h, preservePct);
+
       const rowBytes = (w + 7) >> 3;
       const packed = new Uint8Array(rowBytes * h);
 
       for (let y = 0; y < h; y++) {
-        const rgbaRowStart = y * w * 4;
+        const pRowStart = y * w;
         const bitRowStart = y * rowBytes;
         for (let x = 0; x < w; x++) {
-          const idx = rgbaRowStart + (x << 2);
-          // Luminance threshold at 175: < 175 is black (0), >= 175 is white (1)
-          const lum = (rgba[idx] * 77 + rgba[idx + 1] * 150 + rgba[idx + 2] * 29) >> 8;
-          if (lum >= 175) {
+          // 0 is black, 255 is white (bit 1)
+          if (binBuf[pRowStart + x] >= 128) {
             packed[bitRowStart + (x >> 3)] |= (0x80 >> (x & 7));
           }
         }
@@ -2680,6 +3639,59 @@
         const srcPage = srcPages[i];
         const embPage = embeddedPages[i];
         const newPage = outDoc.addPage([targetPtW, targetPtH]);
+
+        // If Non-Uniform Staff Unroll (Dewarp) is enabled on this page, a 2x3 affine matrix cannot represent
+        // a non-uniform 2D mesh warp, so we render this page at high resolution with the non-uniform dewarp!
+        if (p.dewarp && p.dewarp.enabled && p.dewarp.data) {
+          showProgress('Exporting Unrolled PDF...', `Rendering high-res unrolled Page ${i + 1} of ${pagesData.length}`, pct);
+          await sleep(15);
+          const use1Bit = !!p.filters.binarize;
+          const dpi = use1Bit ? 600 : 300;
+          const targetPxW = Math.round((spec.paper.widthMm / 25.4) * dpi);
+          const targetPxH = Math.round((spec.paper.heightMm / 25.4) * dpi);
+
+          const pdfJsPage = await pdfDoc.getPage(i + 1);
+          const baseVp = pdfJsPage.getViewport({ scale: 1.0 });
+          const renderScale = Math.max(2.0, targetPxH / baseVp.height);
+          const hiVp = pdfJsPage.getViewport({ scale: renderScale });
+
+          const hiSourceCanvas = document.createElement('canvas');
+          hiSourceCanvas.width = Math.round(hiVp.width);
+          hiSourceCanvas.height = Math.round(hiVp.height);
+          const hiCtx = hiSourceCanvas.getContext('2d', { willReadFrequently: true });
+          hiCtx.fillStyle = '#ffffff';
+          hiCtx.fillRect(0, 0, hiSourceCanvas.width, hiSourceCanvas.height);
+          await pdfJsPage.render({ canvasContext: hiCtx, viewport: hiVp }).promise;
+
+          const hiTransformed = createTransformedCanvas(p, hiSourceCanvas, { skipBinarize: use1Bit });
+          const outCanvas = document.createElement('canvas');
+          outCanvas.width = targetPxW;
+          outCanvas.height = targetPxH;
+          drawTargetPageToCanvas(i, outCanvas, hiTransformed, false);
+
+          if (use1Bit) {
+            const { PDFName, concatTransformationMatrix, drawObject } = PDFLib;
+            const imageRef = await packCanvasTo1BitFlateImage(outDoc, outCanvas, p);
+            const imgKey = PDFName.of(`ImUw${i}`);
+            newPage.node.setXObject(imgKey, imageRef);
+            newPage.pushOperators(
+              pushGraphicsState(),
+              concatTransformationMatrix(targetPtW, 0, 0, targetPtH, 0, 0),
+              drawObject(imgKey),
+              popGraphicsState()
+            );
+          } else {
+            const jpgDataUrl = outCanvas.toDataURL('image/jpeg', 0.88);
+            const jpgImg = await outDoc.embedJpg(jpgDataUrl);
+            newPage.drawImage(jpgImg, {
+              x: 0,
+              y: 0,
+              width: targetPtW,
+              height: targetPtH
+            });
+          }
+          continue;
+        }
 
         // Read original page's CropBox (e.g., [44.14, 20.27, ...]) and /Rotate (e.g., 0 or 180 on even pages!)
         // because PDF.js renders relative to the rotated CropBox, whereas pdf-lib embeds raw unrotated MediaBox coordinates.
@@ -2814,10 +3826,10 @@
 
         await page.render({ canvasContext: hiCtx, viewport: hiVp }).promise;
 
-        const hiTransformed = createTransformedCanvas(pagesData[i], hiSourceCanvas);
+        const hiTransformed = createTransformedCanvas(pagesData[i], hiSourceCanvas, { skipBinarize: true });
         drawTargetPageToCanvas(i, outCanvas, hiTransformed, false);
 
-        const imageRef = await packCanvasTo1BitFlateImage(outDoc, outCanvas);
+        const imageRef = await packCanvasTo1BitFlateImage(outDoc, outCanvas, pagesData[i]);
         const pdfPage = outDoc.addPage([targetPtW, targetPtH]);
         const imgKey = PDFName.of(`Im${i}`);
         pdfPage.node.setXObject(imgKey, imageRef);

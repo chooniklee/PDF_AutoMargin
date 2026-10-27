@@ -1,0 +1,10 @@
+# Exclude scanned sheet music PDFs
+*.pdf
+*.PDF
+
+# OS / Editor metadata
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/

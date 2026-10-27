@@ -1,0 +1,2779 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ScoreMargin Studio — Semi-Auto PDF Margin & Deskew Tool</title>
+  <!-- PDF.js (v3.11.174) & Worker -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"></script>
+  <!-- pdf-lib (v1.17.1) for lossless 600 DPI native stream & 1-bit monochrome PDF generation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <!-- jsPDF (v2.5.1) fallback -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-panel: #1e293b;
+      --bg-card: #334155;
+      --bg-input: #0f172a;
+      --border: #334155;
+      --border-light: #475569;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --accent-soft: rgba(59, 130, 246, 0.15);
+      --emerald: #10b981;
+      --emerald-hover: #059669;
+      --amber: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    /* Top Header */
+    header {
+      height: 58px;
+      background-color: var(--bg-panel);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 18px;
+      flex-shrink: 0;
+      gap: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 1.05rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      background: linear-gradient(135deg, #3b82f6, #6366f1);
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.1rem;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.35);
+    }
+
+    .file-status {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      background: var(--bg-dark);
+      padding: 5px 12px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      max-width: 340px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .header-center {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-dark);
+      padding: 4px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+
+    .view-tab {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.81rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .view-tab.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 7px 13px;
+      border-radius: 7px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid var(--border-light);
+      background: var(--bg-card);
+      color: var(--text-main);
+      transition: all 0.15s;
+      white-space: nowrap;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: #475569;
+    }
+
+    .btn:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .btn-success {
+      background: var(--emerald);
+      border-color: var(--emerald);
+      color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      background: var(--emerald-hover);
+    }
+
+    .btn-sm {
+      padding: 5px 9px;
+      font-size: 0.76rem;
+      border-radius: 5px;
+    }
+
+    /* Main Workspace Layout */
+    .workspace {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+    }
+
+    /* Left Thumbnail Sidebar */
+    .sidebar-left {
+      width: 175px;
+      background: var(--bg-panel);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 10px 12px;
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .thumb-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .thumb-item {
+      background: var(--bg-dark);
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .thumb-item:hover {
+      border-color: var(--border-light);
+    }
+
+    .thumb-item.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.25);
+    }
+
+    .thumb-canvas-wrap {
+      width: 100%;
+      display: flex;
+      justify-content: center;
+      background: #fff;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .thumb-canvas-wrap canvas {
+      max-width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .thumb-label {
+      margin-top: 5px;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .thumb-badge {
+      font-size: 0.65rem;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(59, 130, 246, 0.2);
+      color: #93c5fd;
+    }
+
+    /* Center Stage */
+    .stage {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: #090d16;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Page Navigation Bar inside Stage */
+    .stage-toolbar {
+      height: 44px;
+      background: rgba(30, 41, 59, 0.85);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      font-size: 0.81rem;
+    }
+
+    .page-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stage-hint {
+      color: var(--text-muted);
+      font-size: 0.76rem;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .kbd {
+      background: var(--bg-dark);
+      border: 1px solid var(--border-light);
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-size: 0.71rem;
+      color: #cbd5e1;
+    }
+
+    /* Split / Editor Area */
+    .stage-content {
+      flex: 1;
+      display: flex;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pane + .pane {
+      border-left: 1px solid var(--border);
+    }
+
+    .pane-title {
+      position: absolute;
+      top: 10px;
+      left: 14px;
+      background: rgba(15, 23, 42, 0.88);
+      border: 1px solid var(--border);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .canvas-container {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      max-width: 100%;
+      max-height: 100%;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    #editorCanvas {
+      display: block;
+      cursor: crosshair;
+      background: #fff;
+    }
+
+    #previewCanvas {
+      display: block;
+      background: #fff;
+    }
+
+    /* All Pages Grid View */
+    #gridViewContainer {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 20px;
+      align-content: start;
+    }
+
+    .grid-card {
+      background: var(--bg-panel);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: transform 0.15s, border-color 0.15s;
+    }
+
+    .grid-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+    }
+
+    .grid-card.active {
+      border-color: var(--accent);
+    }
+
+    .grid-card canvas {
+      max-width: 100%;
+      height: auto;
+      background: white;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    }
+
+    .grid-card-meta {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+    }
+
+    /* Empty Dropzone Overlay */
+    .dropzone-overlay {
+      position: absolute;
+      inset: 0;
+      background: #090d16;
+      z-index: 30;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .dropzone-box {
+      max-width: 540px;
+      width: 100%;
+      border: 2px dashed var(--border-light);
+      border-radius: 16px;
+      background: rgba(30, 41, 59, 0.5);
+      padding: 42px 32px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      transition: all 0.2s;
+      cursor: pointer;
+    }
+
+    .dropzone-box.dragover, .dropzone-box:hover {
+      border-color: var(--accent);
+      background: rgba(59, 130, 246, 0.08);
+    }
+
+    .dropzone-icon {
+      font-size: 3rem;
+      margin-bottom: 4px;
+    }
+
+    .dropzone-title {
+      font-size: 1.18rem;
+      font-weight: 700;
+    }
+
+    .dropzone-desc {
+      font-size: 0.86rem;
+      color: var(--text-muted);
+      line-height: 1.55;
+    }
+
+    /* Right Inspector Panel */
+    .sidebar-right {
+      width: 350px;
+      background: var(--bg-panel);
+      border-left: 1px solid var(--border);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .control-section {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+
+    .section-title {
+      font-size: 0.81rem;
+      font-weight: 700;
+      color: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .section-subtitle {
+      font-size: 0.73rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .control-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.79rem;
+    }
+
+    .control-label {
+      color: #cbd5e1;
+      font-size: 0.78rem;
+    }
+
+    .control-value {
+      font-variant-numeric: tabular-nums;
+      color: #93c5fd;
+      font-weight: 600;
+      font-size: 0.77rem;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    select, input[type="number"], input[type="text"] {
+      background: var(--bg-input);
+      border: 1px solid var(--border-light);
+      color: var(--text-main);
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 0.79rem;
+      outline: none;
+    }
+
+    select:focus, input[type="number"]:focus, input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 6px;
+    }
+
+    .num-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .num-field span {
+      font-size: 0.69rem;
+      color: var(--text-muted);
+    }
+
+    .num-field input {
+      width: 100%;
+      text-align: center;
+    }
+
+    .checkbox-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.78rem;
+      color: #cbd5e1;
+      cursor: pointer;
+    }
+
+    .checkbox-row input[type="checkbox"] {
+      accent-color: var(--accent);
+      width: 15px;
+      height: 15px;
+      cursor: pointer;
+    }
+
+    /* Modal / Progress Overlay */
+    .progress-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(9, 13, 22, 0.82);
+      z-index: 100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .progress-card {
+      background: var(--bg-panel);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 24px 32px;
+      min-width: 340px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+    }
+
+    .progress-bar-wrap {
+      width: 100%;
+      height: 8px;
+      background: var(--bg-dark);
+      border-radius: 99px;
+      overflow: hidden;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--emerald));
+      transition: width 0.15s;
+    }
+
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: #1e293b;
+      border: 1px solid var(--accent);
+      color: #f8fafc;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 0.83rem;
+      font-weight: 600;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 200;
+      pointer-events: none;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Header -->
+  <header>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div class="brand">
+        <div class="brand-badge">🎼</div>
+        <span>ScoreMargin Studio</span>
+      </div>
+      <div class="file-status" id="fileStatusText">No PDF Loaded</div>
+    </div>
+
+    <div class="header-center">
+      <button class="view-tab active" data-view="split" onclick="setViewMode('split')">Split View (Crop + Output Preview)</button>
+      <button class="view-tab" data-view="editor" onclick="setViewMode('editor')">Crop Editor Only</button>
+      <button class="view-tab" data-view="grid" onclick="setViewMode('grid')">All Pages Grid</button>
+    </div>
+
+    <div class="header-actions">
+      <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" />
+      <button class="btn" onclick="document.getElementById('pdfFileInput').click()">📂 Open PDF</button>
+      <button class="btn btn-primary" id="btnAutoAll" onclick="autoDetectAllPages()" disabled>✨ Auto-Crop All Pages</button>
+      <button class="btn btn-success" id="btnExportPdf" onclick="exportAdjustedPdf()" disabled>💾 Save As PDF</button>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <div class="workspace">
+    <!-- Left Page Thumbnails -->
+    <aside class="sidebar-left">
+      <div class="sidebar-header">
+        <span>Pages</span>
+        <span id="pageCountBadge">0p</span>
+      </div>
+      <div class="thumb-list" id="thumbList"></div>
+    </aside>
+
+    <!-- Center Interactive Stage -->
+    <main class="stage">
+      <!-- Dropzone when no file loaded -->
+      <div class="dropzone-overlay" id="dropzoneOverlay">
+        <div class="dropzone-box" id="dropzoneBox" onclick="document.getElementById('pdfFileInput').click()">
+          <div class="dropzone-icon">📄🎼</div>
+          <div class="dropzone-title">Drop a Scanned Sheet Music PDF Here or Click to Open</div>
+          <div class="dropzone-desc">
+            • Semi-automatic margin detection & interactive drag-handle crop adjustment<br/>
+            • Auto-Deskew based on horizontal staff lines & background cleanup<br/>
+            • Preserves native 600 DPI 1-bit JBIG2 stream (compact file size) or exports 600 DPI 1-bit monochrome on Letter / A4
+          </div>
+          <button class="btn btn-primary" style="margin-top:8px; padding:10px 20px; font-size:0.9rem;" onclick="event.stopPropagation(); document.getElementById('pdfFileInput').click();">
+            Select PDF File
+          </button>
+        </div>
+      </div>
+
+      <!-- Stage Top Navigation Bar -->
+      <div class="stage-toolbar">
+        <div class="page-nav">
+          <button class="btn btn-sm" id="btnPrevPage" onclick="changePage(-1)" disabled>◀ Prev</button>
+          <span id="currentPageIndicator" style="font-weight:700; min-width:95px; text-align:center;">Page 0 / 0</span>
+          <button class="btn btn-sm" id="btnNextPage" onclick="changePage(1)" disabled>Next ▶</button>
+        </div>
+        <div class="stage-hint">
+          <span>💡 <b>Drag Blue Handles/Edges</b>: Resize margins</span>
+          <span>•</span>
+          <span><b>Drag Inside Box</b>: Move fixed-size crop window</span>
+          <span>•</span>
+          <span><span class="kbd">Wheel</span> / <span class="kbd">←</span><span class="kbd">→</span> Navigate pages</span>
+        </div>
+      </div>
+
+      <!-- Split / Single Editor Stage -->
+      <div class="stage-content" id="editorStageContainer">
+        <!-- Left Pane: Source Crop Editor -->
+        <div class="pane" id="editorPane">
+          <div class="pane-title">
+            <span>✂️ Source Scan & Crop Box</span>
+            <span id="cropSizeReadout" style="color:#93c5fd;"></span>
+          </div>
+          <div class="canvas-container">
+            <canvas id="editorCanvas"></canvas>
+          </div>
+        </div>
+
+        <!-- Right Pane: Final Output Preview -->
+        <div class="pane" id="previewPane">
+          <div class="pane-title">
+            <span>📐 Target Paper Preview</span>
+            <span id="previewSpecReadout" style="color:#6ee7b7;">Letter (215.9 × 279.4 mm)</span>
+          </div>
+          <div class="canvas-container">
+            <canvas id="previewCanvas"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- All Pages Grid Container -->
+      <div id="gridViewContainer"></div>
+    </main>
+
+    <!-- Right Controls Sidebar -->
+    <aside class="sidebar-right">
+
+      <!-- 1. Semi-Auto Margin Detection -->
+      <div class="control-section">
+        <div class="section-title">
+          <span>1. Semi-Auto Margin Detection</span>
+        </div>
+        <div class="section-subtitle">
+          Automatically detects the ink bounding box of the music score.
+        </div>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkIgnoreCorners" checked onchange="onDetectConfigChange()" />
+          <span>Ignore old corner page numbers (e.g., 14, 15)</span>
+        </label>
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkMaskCorners" onchange="onMaskCornersChange()" />
+          <span>White-out (erase) corner page number zones</span>
+        </label>
+
+        <div class="control-row">
+          <span class="control-label">Noise Tolerance (Sensitivity)</span>
+          <span class="control-value" id="valSensitivity">Medium (25)</span>
+        </div>
+        <input type="range" id="rngSensitivity" min="5" max="60" value="25" oninput="updateSensitivityLabel(this.value)" onchange="onDetectConfigChange(true)" />
+
+        <div class="control-row">
+          <span class="control-label">Auto-Crop Padding</span>
+          <span class="control-value" id="valAutoPad">1.8%</span>
+        </div>
+        <input type="range" id="rngAutoPad" min="0" max="8" step="0.2" value="1.8" oninput="document.getElementById('valAutoPad').textContent = this.value + '%'; onDetectConfigChange();" />
+
+        <div class="grid-2" style="margin-top:2px;">
+          <button class="btn btn-sm btn-primary" onclick="autoDetectCurrentPage()">Auto-Crop Page</button>
+          <button class="btn btn-sm btn-primary" onclick="autoDetectAllPages()">Auto-Crop All</button>
+        </div>
+
+        <button class="btn btn-sm" onclick="unifyCropSizeAcrossPages()" title="Unifies the crop width & height across all pages and auto-centers each box on the detected music score">
+          📏 Unify Crop Width & Height Across All Pages
+        </button>
+      </div>
+
+      <!-- 2. Fine Crop Adjustment & Batch Sync -->
+      <div class="control-section">
+        <div class="section-title">
+          <span>2. Fine Crop Margins & Batch Sync</span>
+        </div>
+        <div class="grid-4">
+          <div class="num-field">
+            <span>Top (%)</span>
+            <input type="number" id="numCropTop" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+          </div>
+          <div class="num-field">
+            <span>Bottom (%)</span>
+            <input type="number" id="numCropBottom" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+          </div>
+          <div class="num-field">
+            <span>Left (%)</span>
+            <input type="number" id="numCropLeft" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+          </div>
+          <div class="num-field">
+            <span>Right (%)</span>
+            <input type="number" id="numCropRight" min="0" max="45" step="0.2" value="5" onchange="onNumericCropChange()" />
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:4px;">
+          <button class="btn btn-sm" onclick="applyCropToScope('all')">Copy to All Pages</button>
+          <button class="btn btn-sm" onclick="applyCropToScope('parity')">Copy to Odd/Even</button>
+        </div>
+      </div>
+
+      <!-- 3. Deskew & Image Enhancement -->
+      <div class="control-section">
+        <div class="section-title">
+          <span>3. Deskew & Image Cleanup</span>
+        </div>
+
+        <div class="control-row">
+          <span class="control-label">Fine Rotation (Deskew)</span>
+          <span class="control-value" id="valSkew">0.00°</span>
+        </div>
+        <input type="range" id="rngSkew" min="-4" max="4" step="0.05" value="0" oninput="onSkewSliderChange(this.value)" />
+
+        <div class="grid-2">
+          <button class="btn btn-sm" onclick="autoDeskewCurrentPage()">📐 Auto-Deskew Page</button>
+          <button class="btn btn-sm" onclick="autoDeskewAllPages()">📐 Auto-Deskew All</button>
+        </div>
+
+        <div class="control-row" style="margin-top:4px;">
+          <span class="control-label">White Point (Background Cleanup)</span>
+          <span class="control-value" id="valWhiteLevel">255 (Off)</span>
+        </div>
+        <input type="range" id="rngWhiteLevel" min="170" max="255" step="1" value="255" oninput="onFilterChange()" />
+
+        <div class="control-row">
+          <span class="control-label">Contrast Boost</span>
+          <span class="control-value" id="valContrast">100%</span>
+        </div>
+        <input type="range" id="rngContrast" min="100" max="200" step="5" value="100" oninput="onFilterChange()" />
+
+        <label class="checkbox-row">
+          <input type="checkbox" id="chkBinarize" onchange="onFilterChange()" />
+          <span>Strict 1-Bit Binarize (Pure Black & White)</span>
+        </label>
+
+        <button class="btn btn-sm" onclick="applyFiltersToAllPages()">Apply Image Cleanup to All Pages</button>
+      </div>
+
+      <!-- 4. Output Paper Size & Scaling Mode -->
+      <div class="control-section">
+        <div class="section-title">
+          <span>4. Target Paper Size & Margins</span>
+        </div>
+
+        <div class="control-row">
+          <span class="control-label">Paper Size</span>
+          <select id="selPaperSize" onchange="onOutputConfigChange()" style="width:175px;">
+            <option value="letter" selected>Letter (215.9 × 279.4 mm)</option>
+            <option value="a4">A4 (210.0 × 297.0 mm)</option>
+            <option value="b4">B4 (250.0 × 353.0 mm)</option>
+            <option value="legal">Legal (215.9 × 355.6 mm)</option>
+          </select>
+        </div>
+
+        <div class="control-row">
+          <span class="control-label">Scaling Mode</span>
+          <select id="selScaleMode" onchange="onOutputConfigChange()" style="width:195px;">
+            <option value="uniform" selected>Uniform Staff Scale (Recommended)</option>
+            <option value="fit">Scale Each Page to Fit Margins</option>
+          </select>
+        </div>
+
+        <div class="section-subtitle" id="scaleModeDesc" style="color:#93c5fd;">
+          • Keeps a uniform scaling factor across all pages so staff sizes never jump from page to page.
+        </div>
+
+        <div class="control-row" style="margin-top:4px;">
+          <span class="control-label">Target Margins (mm)</span>
+          <button class="btn btn-sm" style="padding:2px 6px; font-size:0.7rem;" onclick="setEqualOutputMargins()">Equalize</button>
+        </div>
+        <div class="grid-4">
+          <div class="num-field">
+            <span>Top (mm)</span>
+            <input type="number" id="outMarginTop" min="0" max="50" step="1" value="12" onchange="onOutputConfigChange()" />
+          </div>
+          <div class="num-field">
+            <span>Bottom (mm)</span>
+            <input type="number" id="outMarginBottom" min="0" max="50" step="1" value="12" onchange="onOutputConfigChange()" />
+          </div>
+          <div class="num-field">
+            <span>Left (mm)</span>
+            <input type="number" id="outMarginLeft" min="0" max="50" step="1" value="12" onchange="onOutputConfigChange()" />
+          </div>
+          <div class="num-field">
+            <span>Right (mm)</span>
+            <input type="number" id="outMarginRight" min="0" max="50" step="1" value="12" onchange="onOutputConfigChange()" />
+          </div>
+        </div>
+
+        <div class="control-row" style="margin-top:4px;">
+          <span class="control-label">Binding Gutter Offset (Odd/Even)</span>
+          <div style="display:flex; align-items:center; gap:4px;">
+            <input type="number" id="outGutterMm" min="0" max="25" step="1" value="0" style="width:58px; text-align:center;" onchange="onOutputConfigChange()" />
+            <span style="font-size:0.75rem; color:var(--text-muted);">mm</span>
+          </div>
+        </div>
+
+        <label class="checkbox-row" style="margin-top:2px;">
+          <input type="checkbox" id="chkAddPageNum" onchange="onOutputConfigChange()" />
+          <span>Print clean new page numbers (top outer corner)</span>
+        </label>
+
+        <div class="control-row" id="rowStartPageNum" style="display:none;">
+          <span class="control-label">Starting Page Number</span>
+          <input type="number" id="numStartPage" value="1" min="1" max="999" style="width:70px; text-align:center;" onchange="onOutputConfigChange()" />
+        </div>
+      </div>
+
+      <!-- 5. Export Settings -->
+      <div class="control-section" style="border-bottom:none;">
+        <div class="section-title">
+          <span>5. Save As / Export Settings</span>
+        </div>
+
+        <div class="control-row">
+          <span class="control-label">Output File Name</span>
+        </div>
+        <input type="text" id="txtExportFilename" placeholder="Enter file name (.pdf)" value="score_adjusted.pdf" style="width:100%;" />
+
+        <div class="control-row" style="margin-top:4px;">
+          <span class="control-label">Quality & Compression Mode</span>
+        </div>
+        <select id="selExportMode" style="width:100%;" onchange="onExportModeChange()">
+          <option value="native_lossless" selected>⚡ Native 600 DPI Lossless (Keep Original JBIG2 — ~600 KB)</option>
+          <option value="mono_600">🎯 600 DPI 1-Bit Monochrome (Apply Image Filters — ~1.2 MB)</option>
+          <option value="mono_300">📄 300 DPI 1-Bit Monochrome (Apply Image Filters — ~550 KB)</option>
+          <option value="jpeg_300">🖼️ 300 DPI Grayscale JPEG (For Halftones — ~3.5 MB)</option>
+        </select>
+        <div class="section-subtitle" id="exportModeDesc" style="color:#6ee7b7;">
+          • Preserves the exact original 600 DPI 1-bit JBIG2 stream without re-encoding. Zero quality loss & same tiny file size as the original scan!
+        </div>
+
+        <button class="btn btn-success" id="btnExportBottom" style="width:100%; padding:11px; margin-top:6px; font-size:0.9rem;" onclick="exportAdjustedPdf()" disabled>
+          💾 Save As PDF...
+        </button>
+      </div>
+
+    </aside>
+  </div>
+
+  <!-- Progress Modal -->
+  <div class="progress-overlay" id="progressOverlay">
+    <div class="progress-card">
+      <div id="progressTitle" style="font-weight:700; font-size:1rem;">Processing...</div>
+      <div id="progressSubtitle" style="font-size:0.82rem; color:var(--text-muted);">Please wait</div>
+      <div class="progress-bar-wrap">
+        <div class="progress-bar-fill" id="progressBarFill"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toastBox"></div>
+
+  <script>
+    // ============================================================================
+    // 1. PDF.js Worker Configuration (100% compatible with local file:// protocol)
+    // ============================================================================
+    (function setupPdfWorker() {
+      const workerUrl = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      try {
+        const blob = new Blob([`importScripts("${workerUrl}");`], { type: 'application/javascript' });
+        pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(blob);
+      } catch (e) {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+      }
+    })();
+
+    // ============================================================================
+    // 2. Application State
+    // ============================================================================
+    const PAPER_SPECS = {
+      letter: { name: 'Letter', widthMm: 215.9, heightMm: 279.4 },
+      a4:     { name: 'A4',     widthMm: 210.0, heightMm: 297.0 },
+      b4:     { name: 'B4',     widthMm: 250.0, heightMm: 353.0 },
+      legal:  { name: 'Legal',  widthMm: 215.9, heightMm: 355.6 }
+    };
+
+    let pdfDoc = null;
+    let rawPdfBytes = null; // Preserved original PDF Uint8Array for lossless 600 DPI JBIG2 export
+    let originalFileName = '';
+    let pagesData = []; // Array of { pageIndex, workCanvas, origWidth, origHeight, crop: {top, bottom, left, right}, skewDeg, filters: {whiteLevel, contrast, binarize} }
+    let currentPageIdx = 0;
+    let viewMode = 'split'; // 'split' | 'editor' | 'grid'
+
+    // Interactive Crop Dragging State
+    const editorCanvas = document.getElementById('editorCanvas');
+    const editorCtx = editorCanvas.getContext('2d');
+    const previewCanvas = document.getElementById('previewCanvas');
+    const previewCtx = previewCanvas.getContext('2d');
+
+    let dragMode = null; // 'n','s','e','w','nw','ne','sw','se','move'
+    let dragStartMouse = { x: 0, y: 0 };
+    let dragStartCrop = null;
+    let isInteracting = false;
+
+    // Cache for transformed (deskewed + filtered) working canvas of the active page
+    let cachedTransformed = { pageIdx: -1, key: '', canvas: null };
+
+    // ============================================================================
+    // 3. File Open & Drag-and-Drop Handling
+    // ============================================================================
+    const fileInput = document.getElementById('pdfFileInput');
+    const dropzoneOverlay = document.getElementById('dropzoneOverlay');
+    const dropzoneBox = document.getElementById('dropzoneBox');
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        loadPdfFile(e.target.files[0]);
+      }
+    });
+
+    window.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzoneBox.classList.add('dragover');
+    });
+
+    window.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropzoneBox.classList.remove('dragover');
+    });
+
+    window.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzoneBox.classList.remove('dragover');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        const file = e.dataTransfer.files[0];
+        if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+          loadPdfFile(file);
+        } else {
+          showToast('Please select a valid PDF file.');
+        }
+      }
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+      if (!pdfDoc) return;
+      if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+      if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        changePage(-1);
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault();
+        changePage(1);
+      }
+    });
+
+    // Mouse Wheel Page Navigation (1 page per scroll step on the editor/preview stage)
+    let lastWheelPageTurnTime = 0;
+    document.getElementById('editorStageContainer').addEventListener('wheel', (e) => {
+      if (!pdfDoc || viewMode === 'grid' || dragMode) return;
+      e.preventDefault();
+      const now = performance.now();
+      if (now - lastWheelPageTurnTime < 180) return; // Prevent skipping multiple pages on a single scroll gesture
+      if (Math.abs(e.deltaY) < 8) return;
+
+      lastWheelPageTurnTime = now;
+      if (e.deltaY > 0) {
+        changePage(1);
+      } else if (e.deltaY < 0) {
+        changePage(-1);
+      }
+    }, { passive: false });
+
+    window.addEventListener('resize', () => {
+      if (pdfDoc) renderActiveView();
+    });
+
+    async function loadPdfFile(file) {
+      try {
+        showProgress('Loading PDF Document...', `Reading ${file.name}`, 5);
+        originalFileName = file.name.replace(/\.pdf$/i, '');
+        const defaultOutName = `${originalFileName}_adjusted.pdf`;
+        document.getElementById('txtExportFilename').value = defaultOutName;
+        const sizeKb = Math.round(file.size / 1024);
+        document.getElementById('fileStatusText').textContent = `${file.name} (${sizeKb} KB)`;
+
+        const arrayBuffer = await file.arrayBuffer();
+        // Keep an independent copy of raw PDF bytes because PDF.js transfers/detaches its buffer
+        rawPdfBytes = new Uint8Array(arrayBuffer.slice(0));
+
+        pdfDoc = await pdfjsLib.getDocument({ data: new Uint8Array(arrayBuffer) }).promise;
+
+        const numPages = pdfDoc.numPages;
+        document.getElementById('pageCountBadge').textContent = `${numPages}p`;
+        pagesData = [];
+
+        const thumbList = document.getElementById('thumbList');
+        thumbList.innerHTML = '';
+
+        // Render working canvases for each page (~1300px height for fast interactive work)
+        for (let i = 1; i <= numPages; i++) {
+          const pct = Math.round((i / numPages) * 85);
+          showProgress('Rendering Pages & Detecting Margins...', `Processing page ${i} of ${numPages}`, pct);
+
+          const page = await pdfDoc.getPage(i);
+          const baseVp = page.getViewport({ scale: 1.0 });
+          const workScale = Math.min(2.2, Math.max(1.2, 1300 / Math.max(baseVp.width, baseVp.height)));
+          const vp = page.getViewport({ scale: workScale });
+
+          const workCanvas = document.createElement('canvas');
+          workCanvas.width = Math.round(vp.width);
+          workCanvas.height = Math.round(vp.height);
+          const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, workCanvas.width, workCanvas.height);
+
+          await page.render({ canvasContext: ctx, viewport: vp }).promise;
+
+          const pageObj = {
+            pageIndex: i - 1,
+            workCanvas,
+            origWidth: baseVp.width,
+            origHeight: baseVp.height,
+            scoreLeft: 0.08,
+            scoreRight: 0.92,
+            rawBounds: null,
+            crop: { top: 0.05, bottom: 0.05, left: 0.06, right: 0.06 },
+            skewDeg: 0,
+            filters: {
+              whiteLevel: 255,
+              contrast: 100,
+              binarize: false
+            }
+          };
+
+          analyzePageInkBounds(pageObj);
+          pagesData.push(pageObj);
+
+          // Create Thumbnail Item
+          const thumbItem = document.createElement('div');
+          thumbItem.className = 'thumb-item' + (i === 1 ? ' active' : '');
+          thumbItem.id = `thumb-item-${i - 1}`;
+          thumbItem.onclick = () => selectPage(i - 1);
+
+          const wrap = document.createElement('div');
+          wrap.className = 'thumb-canvas-wrap';
+          const thumbCanvas = document.createElement('canvas');
+          thumbCanvas.id = `thumb-canvas-${i - 1}`;
+          thumbCanvas.width = 140;
+          thumbCanvas.height = Math.round(140 * (workCanvas.height / workCanvas.width));
+          wrap.appendChild(thumbCanvas);
+
+          const label = document.createElement('div');
+          label.className = 'thumb-label';
+          label.innerHTML = `<span>Page ${i}</span> <span class="thumb-badge">${i % 2 === 1 ? 'Odd' : 'Even'}</span>`;
+
+          thumbItem.appendChild(wrap);
+          thumbItem.appendChild(label);
+          thumbList.appendChild(thumbItem);
+        }
+
+        // Apply uniform score-right-edge-anchored auto-crop across all pages
+        applyUniformScoreRightCropToPages();
+        for (let i = 0; i < numPages; i++) {
+          drawThumbnail(i);
+        }
+
+        dropzoneOverlay.style.display = 'none';
+        document.getElementById('btnAutoAll').disabled = false;
+        document.getElementById('btnExportPdf').disabled = false;
+        document.getElementById('btnExportBottom').disabled = false;
+
+        currentPageIdx = 0;
+        cachedTransformed.pageIdx = -1;
+        selectPage(0);
+        hideProgress();
+        showToast(`Loaded ${numPages} pages and auto-detected score margins!`);
+      } catch (err) {
+        console.error(err);
+        hideProgress();
+        alert('Failed to load PDF file: ' + err.message);
+      }
+    }
+
+    // ============================================================================
+    // 4. Image Processing: Deskew + Contrast / White-level Cleanup
+    // ============================================================================
+    function createTransformedCanvas(pageObj, sourceCanvas = pageObj.workCanvas) {
+      const w = sourceCanvas.width;
+      const h = sourceCanvas.height;
+      const out = document.createElement('canvas');
+      out.width = w;
+      out.height = h;
+      const ctx = out.getContext('2d', { willReadFrequently: true });
+
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, w, h);
+
+      // Apply fine rotation around center
+      if (Math.abs(pageObj.skewDeg) > 0.001) {
+        ctx.save();
+        ctx.translate(w / 2, h / 2);
+        ctx.rotate((pageObj.skewDeg * Math.PI) / 180);
+        ctx.drawImage(sourceCanvas, -w / 2, -h / 2);
+        ctx.restore();
+      } else {
+        ctx.drawImage(sourceCanvas, 0, 0);
+      }
+
+      // Optional: Mask out top/bottom outer corner page numbers if enabled
+      const maskCornersEl = document.getElementById('chkMaskCorners');
+      if (maskCornersEl && maskCornersEl.checked) {
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, Math.round(w * 0.112), Math.round(h * 0.055));
+        ctx.fillRect(Math.round(w * 0.888), 0, Math.round(w * 0.112), Math.round(h * 0.055));
+      }
+
+      // Apply pixel filters (White point cleanup, contrast, optional binarization)
+      const { whiteLevel, contrast, binarize } = pageObj.filters;
+      if (whiteLevel < 255 || contrast !== 100 || binarize) {
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        const cFactor = contrast / 100;
+
+        const lut = new Uint8Array(256);
+        for (let v = 0; v < 256; v++) {
+          if (v >= whiteLevel) {
+            lut[v] = 255;
+          } else {
+            let norm = (v / whiteLevel) * 255;
+            norm = (norm - 128) * cFactor + 128;
+            if (binarize) {
+              lut[v] = norm < 165 ? 0 : 255;
+            } else {
+              lut[v] = Math.max(0, Math.min(255, Math.round(norm)));
+            }
+          }
+        }
+
+        for (let i = 0; i < data.length; i += 4) {
+          const lum = (data[i] * 77 + data[i + 1] * 150 + data[i + 2] * 29) >> 8;
+          const val = lut[lum];
+          data[i] = val;
+          data[i + 1] = val;
+          data[i + 2] = val;
+        }
+        ctx.putImageData(imgData, 0, 0);
+      }
+
+      return out;
+    }
+
+    function getActiveTransformedCanvas() {
+      const p = pagesData[currentPageIdx];
+      const maskC = document.getElementById('chkMaskCorners')?.checked ? 1 : 0;
+      const key = `${p.skewDeg}_${p.filters.whiteLevel}_${p.filters.contrast}_${p.filters.binarize}_${maskC}`;
+      if (cachedTransformed.pageIdx === currentPageIdx && cachedTransformed.key === key && cachedTransformed.canvas) {
+        return cachedTransformed.canvas;
+      }
+      const c = createTransformedCanvas(p);
+      cachedTransformed = { pageIdx: currentPageIdx, key, canvas: c };
+      return c;
+    }
+
+    function onMaskCornersChange() {
+      cachedTransformed.pageIdx = -1;
+      if (pdfDoc) renderActiveView();
+    }
+
+    // ============================================================================
+    // 5. Smart Semi-Automatic Margin Detection (Anchored to Score Right Edge) & Auto-Deskew
+    // ============================================================================
+    function analyzePageInkBounds(pageObj) {
+      const canvas = createTransformedCanvas(pageObj);
+      const w = canvas.width;
+      const h = canvas.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const data = ctx.getImageData(0, 0, w, h).data;
+
+      const sensitivity = parseInt(document.getElementById('rngSensitivity').value, 10) || 25;
+      const edgeSkipX = Math.round(w * 0.004);
+      const edgeSkipY = Math.round(h * 0.004);
+
+      function isCornerZone(x, y) {
+        const nx = x / w;
+        const ny = y / h;
+        const inLeftCorner = nx < 0.115;
+        const inRightCorner = nx > 0.885;
+        const inTopCorner = ny < 0.068;
+        const inBottomCorner = ny > 0.940;
+        return (inLeftCorner || inRightCorner) && (inTopCorner || inBottomCorner);
+      }
+
+      // Build binary ink mask and 2D Integral Image (Summed-Area Table)
+      const isInk = new Uint8Array(w * h);
+      const satW = w + 1;
+      const sat = new Int32Array(satW * (h + 1));
+      const darkThreshold = 205;
+
+      for (let y = edgeSkipY; y < h - edgeSkipY; y++) {
+        const rowOffset = y * w * 4;
+        const inkRowOffset = y * w;
+        const satRowOffset = (y + 1) * satW;
+        const satPrevRowOffset = y * satW;
+        let rowSum = 0;
+
+        for (let x = edgeSkipX; x < w - edgeSkipX; x++) {
+          const idx = rowOffset + (x << 2);
+          const lum = (data[idx] * 77 + data[idx + 1] * 150 + data[idx + 2] * 29) >> 8;
+          const ink = lum < darkThreshold ? 1 : 0;
+          isInk[inkRowOffset + x] = ink;
+          rowSum += ink;
+          sat[satRowOffset + x + 1] = sat[satPrevRowOffset + x + 1] + rowSum;
+        }
+      }
+
+      const R = 6;
+      const minClusterPixels = Math.max(3, Math.round(sensitivity / 3));
+
+      // Vertical middle band [7.5% .. 91.5%] strictly contains the music staves & barlines
+      // (excludes top/bottom corner page numbers like "14", "15".."23" and bottom copyright lines)
+      const staffBandYMin = Math.round(h * 0.075);
+      const staffBandYMax = Math.round(h * 0.915);
+
+      let scoreLeftPx = w - edgeSkipX;
+      let scoreRightPx = edgeSkipX;
+
+      let noCornerTopPx = h - edgeSkipY;
+      let noCornerBottomPx = edgeSkipY;
+      let noCornerLeftPx = w - edgeSkipX;
+      let noCornerRightPx = edgeSkipX;
+
+      let fullTopPx = h - edgeSkipY;
+      let fullBottomPx = edgeSkipY;
+      let fullLeftPx = w - edgeSkipX;
+      let fullRightPx = edgeSkipX;
+
+      let foundScore = false;
+      let foundAny = false;
+
+      for (let y = edgeSkipY; y < h - edgeSkipY; y++) {
+        const inkRowOffset = y * w;
+        const y0 = Math.max(edgeSkipY, y - R);
+        const y1 = Math.min(h - edgeSkipY - 1, y + R) + 1;
+        const satY0 = y0 * satW;
+        const satY1 = y1 * satW;
+        const inStaffBand = (y >= staffBandYMin && y <= staffBandYMax);
+
+        for (let x = edgeSkipX; x < w - edgeSkipX; x++) {
+          if (isInk[inkRowOffset + x] === 0) continue;
+
+          const x0 = Math.max(edgeSkipX, x - R);
+          const x1 = Math.min(w - edgeSkipX - 1, x + R) + 1;
+          const neighbors = sat[satY1 + x1] - sat[satY0 + x1] - sat[satY1 + x0] + sat[satY0 + x0];
+
+          if (neighbors >= minClusterPixels) {
+            foundAny = true;
+            if (x < fullLeftPx) fullLeftPx = x;
+            if (x > fullRightPx) fullRightPx = x;
+            if (y < fullTopPx) fullTopPx = y;
+            if (y > fullBottomPx) fullBottomPx = y;
+
+            if (inStaffBand) {
+              foundScore = true;
+              if (x < scoreLeftPx) scoreLeftPx = x;
+              if (x > scoreRightPx) scoreRightPx = x;
+            }
+
+            if (!isCornerZone(x, y)) {
+              if (x < noCornerLeftPx) noCornerLeftPx = x;
+              if (x > noCornerRightPx) noCornerRightPx = x;
+              if (y < noCornerTopPx) noCornerTopPx = y;
+              if (y > noCornerBottomPx) noCornerBottomPx = y;
+            }
+          }
+        }
+      }
+
+      if (!foundAny) {
+        pageObj.scoreLeft = 0.08;
+        pageObj.scoreRight = 0.92;
+        pageObj.rawBounds = {
+          scoreLeft: 0.08, scoreRight: 0.92,
+          noCornerTop: 0.05, noCornerBottom: 0.95,
+          fullLeft: 0.08, fullRight: 0.92,
+          fullTop: 0.05, fullBottom: 0.95
+        };
+        return pageObj.rawBounds;
+      }
+
+      if (!foundScore || scoreRightPx <= scoreLeftPx) {
+        scoreLeftPx = noCornerLeftPx;
+        scoreRightPx = noCornerRightPx;
+      }
+
+      const bounds = {
+        scoreLeft: round4(scoreLeftPx / w),
+        scoreRight: round4(scoreRightPx / w),
+        noCornerTop: round4(noCornerTopPx / h),
+        noCornerBottom: round4(noCornerBottomPx / h),
+        fullLeft: round4(fullLeftPx / w),
+        fullRight: round4(fullRightPx / w),
+        fullTop: round4(fullTopPx / h),
+        fullBottom: round4(fullBottomPx / h)
+      };
+
+      pageObj.scoreLeft = bounds.scoreLeft;
+      pageObj.scoreRight = bounds.scoreRight;
+      pageObj.rawBounds = bounds;
+      return bounds;
+    }
+
+    // Applies auto-crop so that on EVERY page, the right crop boundary is at the
+    // exact same distance from the detected music score's right edge (scoreRight),
+    // whether corner page numbers are included or ignored.
+    function applyUniformScoreRightCropToPages(singlePageIdx = null) {
+      if (pagesData.length === 0) return;
+
+      const ignoreCorners = document.getElementById('chkIgnoreCorners').checked;
+      const padPct = (parseFloat(document.getElementById('rngAutoPad').value) || 1.8) / 100;
+
+      // Ensure all pages have rawBounds computed
+      for (let i = 0; i < pagesData.length; i++) {
+        if (!pagesData[i].rawBounds) analyzePageInkBounds(pagesData[i]);
+      }
+
+      // When corner page numbers are included (!ignoreCorners), measure the maximum distance
+      // that any corner page number sticks out beyond scoreRight / scoreLeft across the document,
+      // so every page uses the exact same offset from scoreRight without ever clipping corner numbers!
+      let uniformRightOutset = 0;
+      let uniformLeftOutset = 0;
+      if (!ignoreCorners) {
+        for (let i = 0; i < pagesData.length; i++) {
+          const b = pagesData[i].rawBounds;
+          const rOut = Math.max(0, b.fullRight - b.scoreRight);
+          const lOut = Math.max(0, b.scoreLeft - b.fullLeft);
+          if (rOut > uniformRightOutset) uniformRightOutset = rOut;
+          if (lOut > uniformLeftOutset) uniformLeftOutset = lOut;
+        }
+      }
+
+      const rightOffsetFromScore = uniformRightOutset + padPct;
+      const leftOffsetFromScore = uniformLeftOutset + padPct;
+
+      const indices = singlePageIdx !== null ? [singlePageIdx] : pagesData.map((_, idx) => idx);
+      for (const idx of indices) {
+        const p = pagesData[idx];
+        const b = p.rawBounds;
+
+        // Right edge is ALWAYS cropped at the uniform offset from the music score's right edge (b.scoreRight)
+        const rightEdgeNorm = Math.min(0.999, b.scoreRight + rightOffsetFromScore);
+        const leftEdgeNorm = Math.max(0.001, b.scoreLeft - leftOffsetFromScore);
+
+        const topInkNorm = ignoreCorners ? b.noCornerTop : b.fullTop;
+        const bottomInkNorm = ignoreCorners ? b.noCornerBottom : b.fullBottom;
+
+        const topEdgeNorm = Math.max(0.001, topInkNorm - padPct);
+        const bottomEdgeNorm = Math.min(0.999, bottomInkNorm + padPct);
+
+        p.crop = {
+          top: round4(topEdgeNorm),
+          bottom: round4(1 - bottomEdgeNorm),
+          left: round4(leftEdgeNorm),
+          right: round4(1 - rightEdgeNorm)
+        };
+      }
+    }
+
+    function computeAutoCropForPage(pageObj) {
+      analyzePageInkBounds(pageObj);
+      applyUniformScoreRightCropToPages(pageObj.pageIndex);
+      return pageObj.crop;
+    }
+
+    function estimateBestSkewAngle(pageObj) {
+      const src = pageObj.workCanvas;
+      const scale = 500 / src.width;
+      const w = Math.round(src.width * scale);
+      const h = Math.round(src.height * scale);
+      const tmp = document.createElement('canvas');
+      tmp.width = w;
+      tmp.height = h;
+      const ctx = tmp.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(src, 0, 0, w, h);
+      const imgData = ctx.getImageData(0, 0, w, h).data;
+
+      const pts = [];
+      const xMin = Math.round(w * 0.1), xMax = Math.round(w * 0.9);
+      const yMin = Math.round(h * 0.1), yMax = Math.round(h * 0.9);
+      const cx = w / 2, cy = h / 2;
+
+      for (let y = yMin; y < yMax; y += 2) {
+        for (let x = xMin; x < xMax; x += 2) {
+          const idx = (y * w + x) * 4;
+          const lum = (imgData[idx] + imgData[idx + 1] + imgData[idx + 2]) / 3;
+          if (lum < 180) {
+            pts.push(x - cx, y - cy);
+          }
+        }
+      }
+
+      if (pts.length < 200) return 0;
+
+      function scoreAngle(deg) {
+        const rad = (deg * Math.PI) / 180;
+        const sinA = Math.sin(rad);
+        const cosA = Math.cos(rad);
+        const hist = new Int32Array(h);
+        for (let i = 0; i < pts.length; i += 2) {
+          const rx = pts[i];
+          const ry = pts[i + 1];
+          const rotY = Math.round(rx * sinA + ry * cosA + cy);
+          if (rotY >= 0 && rotY < h) hist[rotY]++;
+        }
+        let energy = 0;
+        for (let y = 1; y < h; y++) {
+          const diff = hist[y] - hist[y - 1];
+          energy += diff * diff;
+        }
+        return energy;
+      }
+
+      let bestAngle = 0;
+      let bestScore = -1;
+      for (let a = -2.5; a <= 2.5; a += 0.25) {
+        const s = scoreAngle(a);
+        if (s > bestScore) {
+          bestScore = s;
+          bestAngle = a;
+        }
+      }
+      const center = bestAngle;
+      for (let a = center - 0.25; a <= center + 0.25; a += 0.05) {
+        const s = scoreAngle(a);
+        if (s > bestScore) {
+          bestScore = s;
+          bestAngle = a;
+        }
+      }
+      return Math.round(bestAngle * 20) / 20;
+    }
+
+    function autoDetectCurrentPage() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      computeAutoCropForPage(p);
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      showToast(`Auto-cropped Page ${currentPageIdx + 1} (anchored to score right edge).`);
+    }
+
+    async function autoDetectAllPages() {
+      if (!pdfDoc) return;
+      showProgress('Auto-Detecting Score Right Edges & Margins...', '', 10);
+      await sleep(20);
+      for (let i = 0; i < pagesData.length; i++) {
+        analyzePageInkBounds(pagesData[i]);
+        showProgress('Auto-Detecting Score Right Edges & Margins...', `Page ${i + 1} of ${pagesData.length}`, Math.round(((i + 1) / pagesData.length) * 90));
+        await sleep(5);
+      }
+      applyUniformScoreRightCropToPages();
+      for (let i = 0; i < pagesData.length; i++) {
+        drawThumbnail(i);
+      }
+      syncInspectorFromPage();
+      renderActiveView();
+      hideProgress();
+      showToast('Auto-cropped all pages with uniform margin from the music score right edge!');
+    }
+
+    function unifyCropSizeAcrossPages() {
+      if (!pdfDoc || pagesData.length === 0) return;
+      // Compute unified distance to right and left of p.scoreRight across all pages
+      const rightOffsets = pagesData.map(p => (1 - p.crop.right) - p.scoreRight).sort((a, b) => a - b);
+      const leftOffsets = pagesData.map(p => p.scoreRight - p.crop.left).sort((a, b) => a - b);
+      const heights = pagesData.map(p => 1 - p.crop.top - p.crop.bottom).sort((a, b) => a - b);
+      const idx75 = Math.min(pagesData.length - 1, Math.floor(pagesData.length * 0.75));
+      const targetRightOff = rightOffsets[idx75];
+      const targetLeftOff = leftOffsets[idx75];
+      const targetH = heights[idx75];
+
+      for (let i = 0; i < pagesData.length; i++) {
+        const p = pagesData[i];
+        const c = p.crop;
+        const curH = 1 - c.top - c.bottom;
+        const centerY = c.top + curH / 2;
+
+        const rightEdge = Math.min(0.999, p.scoreRight + targetRightOff);
+        const leftEdge = Math.max(0.001, p.scoreRight - targetLeftOff);
+        const newTop = Math.max(0.001, Math.min(1 - targetH - 0.001, centerY - targetH / 2));
+
+        p.crop = {
+          left: round4(leftEdge),
+          right: round4(1 - rightEdge),
+          top: round4(newTop),
+          bottom: round4(1 - newTop - targetH)
+        };
+        drawThumbnail(i);
+      }
+
+      syncInspectorFromPage();
+      renderActiveView();
+      showToast('Unified crop dimensions across all pages anchored to the score right edge!');
+    }
+
+    function autoDeskewCurrentPage() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      p.skewDeg = estimateBestSkewAngle(p);
+      cachedTransformed.pageIdx = -1;
+      computeAutoCropForPage(p);
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      showToast(`Page ${currentPageIdx + 1} auto-deskewed (${p.skewDeg.toFixed(2)}°).`);
+    }
+
+    async function autoDeskewAllPages() {
+      if (!pdfDoc) return;
+      showProgress('Analyzing Staff Lines for Auto-Deskew...', '', 10);
+      await sleep(20);
+      for (let i = 0; i < pagesData.length; i++) {
+        pagesData[i].skewDeg = estimateBestSkewAngle(pagesData[i]);
+        analyzePageInkBounds(pagesData[i]);
+        showProgress('Analyzing Staff Lines for Auto-Deskew...', `Page ${i + 1} of ${pagesData.length}`, Math.round(((i + 1) / pagesData.length) * 90));
+        await sleep(10);
+      }
+      applyUniformScoreRightCropToPages();
+      for (let i = 0; i < pagesData.length; i++) {
+        drawThumbnail(i);
+      }
+      cachedTransformed.pageIdx = -1;
+      syncInspectorFromPage();
+      renderActiveView();
+      hideProgress();
+      showToast('Auto-deskew and score-right-aligned margin detection completed for all pages!');
+    }
+
+    // ============================================================================
+    // 6. Interactive Canvas Rendering (Editor + Output Paper Preview + Grid)
+    // ============================================================================
+    function selectPage(idx) {
+      if (!pdfDoc || idx < 0 || idx >= pagesData.length) return;
+      currentPageIdx = idx;
+
+      document.querySelectorAll('.thumb-item').forEach((el, i) => {
+        el.classList.toggle('active', i === idx);
+      });
+      const activeThumb = document.getElementById(`thumb-item-${idx}`);
+      if (activeThumb) activeThumb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+      document.getElementById('currentPageIndicator').textContent = `Page ${idx + 1} / ${pagesData.length}`;
+      document.getElementById('btnPrevPage').disabled = (idx === 0);
+      document.getElementById('btnNextPage').disabled = (idx === pagesData.length - 1);
+
+      syncInspectorFromPage();
+      renderActiveView();
+    }
+
+    function changePage(delta) {
+      selectPage(currentPageIdx + delta);
+    }
+
+    function setViewMode(mode) {
+      viewMode = mode;
+      document.querySelectorAll('.view-tab').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.view === mode);
+      });
+
+      const editorStage = document.getElementById('editorStageContainer');
+      const previewPane = document.getElementById('previewPane');
+      const gridContainer = document.getElementById('gridViewContainer');
+
+      if (mode === 'grid') {
+        editorStage.style.display = 'none';
+        gridContainer.style.display = 'grid';
+      } else {
+        editorStage.style.display = 'flex';
+        gridContainer.style.display = 'none';
+        previewPane.style.display = (mode === 'split') ? 'flex' : 'none';
+      }
+
+      if (pdfDoc) renderActiveView();
+    }
+
+    function renderActiveView() {
+      if (!pdfDoc || pagesData.length === 0) return;
+      if (viewMode === 'grid') {
+        renderAllPagesGrid();
+      } else {
+        renderEditorCanvas();
+        if (viewMode === 'split') {
+          renderPreviewCanvas();
+        }
+      }
+    }
+
+    function renderEditorCanvas() {
+      const pane = document.getElementById('editorPane');
+      const availW = Math.max(200, pane.clientWidth - 36);
+      const availH = Math.max(200, pane.clientHeight - 46);
+
+      const p = pagesData[currentPageIdx];
+      const transCanvas = getActiveTransformedCanvas();
+      const aspect = transCanvas.width / transCanvas.height;
+
+      let drawW = availW;
+      let drawH = drawW / aspect;
+      if (drawH > availH) {
+        drawH = availH;
+        drawW = drawH * aspect;
+      }
+
+      editorCanvas.width = Math.round(drawW);
+      editorCanvas.height = Math.round(drawH);
+
+      const W = editorCanvas.width;
+      const H = editorCanvas.height;
+
+      // 1. Draw full transformed page
+      editorCtx.drawImage(transCanvas, 0, 0, W, H);
+
+      // 2. Darken outside crop box
+      const cx1 = Math.round(p.crop.left * W);
+      const cy1 = Math.round(p.crop.top * H);
+      const cx2 = Math.round((1 - p.crop.right) * W);
+      const cy2 = Math.round((1 - p.crop.bottom) * H);
+      const cw = Math.max(10, cx2 - cx1);
+      const ch = Math.max(10, cy2 - cy1);
+
+      editorCtx.fillStyle = 'rgba(15, 23, 42, 0.58)';
+      editorCtx.fillRect(0, 0, W, cy1);
+      editorCtx.fillRect(0, cy2, W, H - cy2);
+      editorCtx.fillRect(0, cy1, cx1, ch);
+      editorCtx.fillRect(cx2, cy1, W - cx2, ch);
+
+      // 3. Draw alignment horizontal reference grid inside crop box
+      editorCtx.save();
+      editorCtx.strokeStyle = isInteracting ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.22)';
+      editorCtx.lineWidth = 1;
+      editorCtx.setLineDash([4, 4]);
+      const steps = 8;
+      for (let i = 1; i < steps; i++) {
+        const gy = Math.round(cy1 + (ch * i) / steps);
+        editorCtx.beginPath();
+        editorCtx.moveTo(cx1, gy);
+        editorCtx.lineTo(cx2, gy);
+        editorCtx.stroke();
+      }
+      const gxMid = Math.round(cx1 + cw / 2);
+      editorCtx.beginPath();
+      editorCtx.moveTo(gxMid, cy1);
+      editorCtx.lineTo(gxMid, cy2);
+      editorCtx.stroke();
+
+      // Draw detected Music Score Right Edge reference line (amber dashed line)
+      if (typeof p.scoreRight === 'number') {
+        const scoreRx = Math.round(p.scoreRight * W);
+        editorCtx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
+        editorCtx.lineWidth = 1.5;
+        editorCtx.setLineDash([5, 3]);
+        editorCtx.beginPath();
+        editorCtx.moveTo(scoreRx, cy1);
+        editorCtx.lineTo(scoreRx, cy2);
+        editorCtx.stroke();
+      }
+      editorCtx.restore();
+
+      // 4. Draw Crop Border
+      editorCtx.strokeStyle = '#3b82f6';
+      editorCtx.lineWidth = 2;
+      editorCtx.strokeRect(cx1, cy1, cw, ch);
+
+      // 5. Draw 8 Resize Handles
+      const handles = getHandlePositions(cx1, cy1, cx2, cy2);
+      editorCtx.fillStyle = '#ffffff';
+      editorCtx.strokeStyle = '#2563eb';
+      editorCtx.lineWidth = 2;
+      for (const hPos of Object.values(handles)) {
+        editorCtx.beginPath();
+        editorCtx.rect(hPos.x - 5, hPos.y - 5, 10, 10);
+        editorCtx.fill();
+        editorCtx.stroke();
+      }
+
+      const wPct = ((1 - p.crop.left - p.crop.right) * 100).toFixed(1);
+      const hPct = ((1 - p.crop.top - p.crop.bottom) * 100).toFixed(1);
+      document.getElementById('cropSizeReadout').textContent = `Crop Area: ${wPct}% W × ${hPct}% H`;
+    }
+
+    function getHandlePositions(x1, y1, x2, y2) {
+      const mx = (x1 + x2) / 2;
+      const my = (y1 + y2) / 2;
+      return {
+        nw: { x: x1, y: y1 },
+        n:  { x: mx, y: y1 },
+        ne: { x: x2, y: y1 },
+        e:  { x: x2, y: my },
+        se: { x: x2, y: y2 },
+        s:  { x: mx, y: y2 },
+        sw: { x: x1, y: y2 },
+        w:  { x: x1, y: my }
+      };
+    }
+
+    function getOutputLayoutSpec() {
+      const paperKey = document.getElementById('selPaperSize').value;
+      const paper = PAPER_SPECS[paperKey] || PAPER_SPECS.letter;
+      const scaleMode = document.getElementById('selScaleMode').value;
+
+      const mTop = parseFloat(document.getElementById('outMarginTop').value) || 0;
+      const mBottom = parseFloat(document.getElementById('outMarginBottom').value) || 0;
+      const mLeft = parseFloat(document.getElementById('outMarginLeft').value) || 0;
+      const mRight = parseFloat(document.getElementById('outMarginRight').value) || 0;
+      const gutterMm = parseFloat(document.getElementById('outGutterMm').value) || 0;
+
+      const addPageNum = document.getElementById('chkAddPageNum').checked;
+      const startPageNum = parseInt(document.getElementById('numStartPage').value, 10) || 1;
+
+      // Compute document-wide horizontal envelope relative to each page's music score right edge (p.scoreRight)
+      // so that when placed on the target page, p.scoreRight lands at the EXACT same X coordinate on all pages!
+      let maxLeftFromScoreRightPt = 100;
+      let maxRightFromScoreRightPt = 0;
+      let refScoreWidthPt = 100;
+      let uniformMmPerPt = 1;
+
+      if (pagesData.length > 0) {
+        maxLeftFromScoreRightPt = 0;
+        maxRightFromScoreRightPt = 0;
+        const scoreWidths = [];
+
+        for (let i = 0; i < pagesData.length; i++) {
+          const p = pagesData[i];
+          const sr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+          const sl = typeof p.scoreLeft === 'number' ? p.scoreLeft : p.crop.left;
+          const leftPt = Math.max(1, (sr - p.crop.left) * p.origWidth);
+          const rightPt = Math.max(0, ((1 - p.crop.right) - sr) * p.origWidth);
+          if (leftPt > maxLeftFromScoreRightPt) maxLeftFromScoreRightPt = leftPt;
+          if (rightPt > maxRightFromScoreRightPt) maxRightFromScoreRightPt = rightPt;
+          scoreWidths.push(Math.max(10, (sr - sl) * p.origWidth));
+        }
+
+        scoreWidths.sort((a, b) => a - b);
+        refScoreWidthPt = scoreWidths[Math.floor(scoreWidths.length / 2)];
+
+        const totalEnvelopePtW = maxLeftFromScoreRightPt + maxRightFromScoreRightPt;
+        let minRatio = Infinity;
+
+        for (let i = 0; i < pagesData.length; i++) {
+          const p = pagesData[i];
+          const isOdd = (i % 2 === 0);
+          const effLeft = mLeft + (isOdd ? gutterMm : 0);
+          const effRight = mRight + (!isOdd ? gutterMm : 0);
+          const availW = Math.max(20, paper.widthMm - effLeft - effRight);
+          const availH = Math.max(20, paper.heightMm - mTop - mBottom);
+
+          const cropPtH = p.origHeight * (1 - p.crop.top - p.crop.bottom);
+          const ratio = Math.min(availW / totalEnvelopePtW, availH / cropPtH);
+          if (ratio < minRatio) minRatio = ratio;
+        }
+        uniformMmPerPt = minRatio;
+      }
+
+      return {
+        paper,
+        scaleMode,
+        mTop,
+        mBottom,
+        mLeft,
+        mRight,
+        gutterMm,
+        addPageNum,
+        startPageNum,
+        uniformMmPerPt,
+        maxLeftFromScoreRightPt,
+        maxRightFromScoreRightPt,
+        refScoreWidthPt
+      };
+    }
+
+    // Computes exact placement on the target paper for pageIdx so that the music score's
+    // right edge (p.scoreRight) is locked at the exact same horizontal X position across all pages!
+    function computePageTargetPlacement(pageIdx, spec) {
+      const {
+        paper, scaleMode, mTop, mBottom, mLeft, mRight, gutterMm,
+        uniformMmPerPt, maxLeftFromScoreRightPt, maxRightFromScoreRightPt, refScoreWidthPt
+      } = spec;
+
+      const p = pagesData[pageIdx];
+      const isOdd = (pageIdx % 2 === 0);
+      const effLeftMm = mLeft + (isOdd ? gutterMm : 0);
+      const effRightMm = mRight + (!isOdd ? gutterMm : 0);
+
+      const availWMm = Math.max(10, paper.widthMm - effLeftMm - effRightMm);
+      const availHMm = Math.max(10, paper.heightMm - mTop - mBottom);
+
+      const cropPtW = p.origWidth * (1 - p.crop.left - p.crop.right);
+      const cropPtH = p.origHeight * (1 - p.crop.top - p.crop.bottom);
+      const totalEnvelopePtW = maxLeftFromScoreRightPt + maxRightFromScoreRightPt;
+
+      const scaleMmPerPt = (scaleMode === 'uniform')
+        ? uniformMmPerPt
+        : Math.min(availWMm / totalEnvelopePtW, availHMm / cropPtH);
+
+      const drawWMm = cropPtW * scaleMmPerPt;
+      const drawHMm = cropPtH * scaleMmPerPt;
+
+      // Center the music score body [scoreLeft .. scoreRight] on the target paper,
+      // and clamp slightly if needed so neither left nor right corner page numbers exceed margins.
+      const scoreBodyWMm = refScoreWidthPt * scaleMmPerPt;
+      let targetScoreRightXMm = effLeftMm + (availWMm + scoreBodyWMm) / 2;
+
+      const minScoreRightXMm = effLeftMm + maxLeftFromScoreRightPt * scaleMmPerPt;
+      const maxScoreRightXMm = effLeftMm + availWMm - maxRightFromScoreRightPt * scaleMmPerPt;
+      if (minScoreRightXMm <= maxScoreRightXMm) {
+        targetScoreRightXMm = clamp(targetScoreRightXMm, minScoreRightXMm, maxScoreRightXMm);
+      } else {
+        targetScoreRightXMm = (minScoreRightXMm + maxScoreRightXMm) / 2;
+      }
+
+      const sr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+      const leftFromScoreRightMm = (sr - p.crop.left) * p.origWidth * scaleMmPerPt;
+
+      const destXMm = targetScoreRightXMm - leftFromScoreRightMm;
+      const destYMm = mTop + (availHMm - drawHMm) / 2;
+
+      return {
+        isOdd,
+        effLeftMm,
+        effRightMm,
+        availWMm,
+        availHMm,
+        cropPtW,
+        cropPtH,
+        scaleMmPerPt,
+        drawWMm,
+        drawHMm,
+        destXMm,
+        destYMm,
+        targetScoreRightXMm
+      };
+    }
+
+    function drawTargetPageToCanvas(pageIdx, targetCanvas, sourceCanvas, showGuides = true) {
+      const spec = getOutputLayoutSpec();
+      const { paper, mTop, addPageNum, startPageNum } = spec;
+      const p = pagesData[pageIdx];
+
+      const W = targetCanvas.width;
+      const H = targetCanvas.height;
+      const pxPerMm = W / paper.widthMm;
+
+      const ctx = targetCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, W, H);
+
+      const place = computePageTargetPlacement(pageIdx, spec);
+      const { isOdd, effLeftMm, effRightMm, availWMm, availHMm, drawWMm, drawHMm, destXMm, destYMm, targetScoreRightXMm } = place;
+
+      const sx = p.crop.left * sourceCanvas.width;
+      const sy = p.crop.top * sourceCanvas.height;
+      const sw = (1 - p.crop.left - p.crop.right) * sourceCanvas.width;
+      const sh = (1 - p.crop.top - p.crop.bottom) * sourceCanvas.height;
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(
+        sourceCanvas,
+        sx, sy, sw, sh,
+        destXMm * pxPerMm,
+        destYMm * pxPerMm,
+        drawWMm * pxPerMm,
+        drawHMm * pxPerMm
+      );
+
+      if (addPageNum) {
+        const pageNumStr = String(startPageNum + pageIdx);
+        const fontSizePx = Math.max(10, Math.round(3.6 * pxPerMm));
+        ctx.save();
+        ctx.font = `bold ${fontSizePx}px "Times New Roman", serif`;
+        ctx.fillStyle = '#111827';
+        const numY = Math.max(fontSizePx + 4, (mTop * 0.72) * pxPerMm);
+        if (isOdd) {
+          ctx.textAlign = 'right';
+          ctx.fillText(pageNumStr, (paper.widthMm - effRightMm) * pxPerMm, numY);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillText(pageNumStr, effLeftMm * pxPerMm, numY);
+        }
+        ctx.restore();
+      }
+
+      if (showGuides) {
+        ctx.save();
+        // Green dashed box: Target paper margin area
+        ctx.strokeStyle = 'rgba(16, 185, 129, 0.55)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([5, 4]);
+        ctx.strokeRect(
+          effLeftMm * pxPerMm,
+          mTop * pxPerMm,
+          availWMm * pxPerMm,
+          availHMm * pxPerMm
+        );
+
+        // Amber dashed vertical line: Fixed Music Score Right Edge alignment across all pages
+        ctx.strokeStyle = 'rgba(245, 158, 11, 0.65)';
+        ctx.lineWidth = 1.2;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(targetScoreRightXMm * pxPerMm, mTop * pxPerMm);
+        ctx.lineTo(targetScoreRightXMm * pxPerMm, (mTop + availHMm) * pxPerMm);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+
+    function renderPreviewCanvas() {
+      const pane = document.getElementById('previewPane');
+      const availW = Math.max(200, pane.clientWidth - 36);
+      const availH = Math.max(200, pane.clientHeight - 46);
+
+      const spec = getOutputLayoutSpec();
+      const aspect = spec.paper.widthMm / spec.paper.heightMm;
+
+      let drawW = availW;
+      let drawH = drawW / aspect;
+      if (drawH > availH) {
+        drawH = availH;
+        drawW = drawH * aspect;
+      }
+
+      previewCanvas.width = Math.round(drawW);
+      previewCanvas.height = Math.round(drawH);
+
+      const transCanvas = getActiveTransformedCanvas();
+      drawTargetPageToCanvas(currentPageIdx, previewCanvas, transCanvas, true);
+
+      const modeText = spec.scaleMode === 'uniform' ? 'Uniform Scale' : 'Fit to Margins';
+      document.getElementById('previewSpecReadout').textContent =
+        `${spec.paper.name} (${spec.paper.widthMm}×${spec.paper.heightMm}mm) · ${modeText}`;
+    }
+
+    function renderAllPagesGrid() {
+      const container = document.getElementById('gridViewContainer');
+      container.innerHTML = '';
+      const spec = getOutputLayoutSpec();
+      const aspect = spec.paper.widthMm / spec.paper.heightMm;
+
+      pagesData.forEach((p, idx) => {
+        const card = document.createElement('div');
+        card.className = 'grid-card' + (idx === currentPageIdx ? ' active' : '');
+        card.onclick = () => {
+          selectPage(idx);
+          setViewMode('split');
+        };
+
+        const c = document.createElement('canvas');
+        c.width = 240;
+        c.height = Math.round(240 / aspect);
+
+        const trans = createTransformedCanvas(p);
+        drawTargetPageToCanvas(idx, c, trans, true);
+
+        const meta = document.createElement('div');
+        meta.className = 'grid-card-meta';
+        meta.innerHTML = `<span><b>Page ${idx + 1}</b></span><span>Skew ${p.skewDeg.toFixed(1)}°</span>`;
+
+        card.appendChild(c);
+        card.appendChild(meta);
+        container.appendChild(card);
+      });
+    }
+
+    function drawThumbnail(pageIdx) {
+      const thumbCanvas = document.getElementById(`thumb-canvas-${pageIdx}`);
+      if (!thumbCanvas) return;
+      const p = pagesData[pageIdx];
+      const ctx = thumbCanvas.getContext('2d');
+      const W = thumbCanvas.width;
+      const H = thumbCanvas.height;
+
+      ctx.drawImage(p.workCanvas, 0, 0, W, H);
+
+      const x1 = p.crop.left * W;
+      const y1 = p.crop.top * H;
+      const cw = (1 - p.crop.left - p.crop.right) * W;
+      const ch = (1 - p.crop.top - p.crop.bottom) * H;
+
+      ctx.strokeStyle = '#3b82f6';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(x1, y1, cw, ch);
+    }
+
+    // ============================================================================
+    // 7. Interactive Mouse Dragging on Editor Canvas
+    // ============================================================================
+    function getCanvasMousePos(e) {
+      const rect = editorCanvas.getBoundingClientRect();
+      return {
+        x: (e.clientX - rect.left) * (editorCanvas.width / rect.width),
+        y: (e.clientY - rect.top) * (editorCanvas.height / rect.height)
+      };
+    }
+
+    function hitTestHandle(mx, my) {
+      const p = pagesData[currentPageIdx];
+      const W = editorCanvas.width;
+      const H = editorCanvas.height;
+      const x1 = p.crop.left * W;
+      const y1 = p.crop.top * H;
+      const x2 = (1 - p.crop.right) * W;
+      const y2 = (1 - p.crop.bottom) * H;
+
+      const handles = getHandlePositions(x1, y1, x2, y2);
+      const hitDist = 10;
+      for (const [name, pos] of Object.entries(handles)) {
+        if (Math.abs(mx - pos.x) <= hitDist && Math.abs(my - pos.y) <= hitDist) {
+          return name;
+        }
+      }
+      if (mx >= x1 && mx <= x2 && Math.abs(my - y1) <= 7) return 'n';
+      if (mx >= x1 && mx <= x2 && Math.abs(my - y2) <= 7) return 's';
+      if (my >= y1 && my <= y2 && Math.abs(mx - x1) <= 7) return 'w';
+      if (my >= y1 && my <= y2 && Math.abs(mx - x2) <= 7) return 'e';
+
+      if (mx > x1 && mx < x2 && my > y1 && my < y2) {
+        return 'move';
+      }
+      return null;
+    }
+
+    const CURSOR_MAP = {
+      nw: 'nwse-resize', se: 'nwse-resize',
+      ne: 'nesw-resize', sw: 'nesw-resize',
+      n: 'ns-resize', s: 'ns-resize',
+      e: 'ew-resize', w: 'ew-resize',
+      move: 'move'
+    };
+
+    editorCanvas.addEventListener('mousemove', (e) => {
+      if (!pdfDoc) return;
+      const pos = getCanvasMousePos(e);
+
+      if (!dragMode) {
+        const hit = hitTestHandle(pos.x, pos.y);
+        editorCanvas.style.cursor = hit ? CURSOR_MAP[hit] : 'default';
+        return;
+      }
+
+      const W = editorCanvas.width;
+      const H = editorCanvas.height;
+      const dx = (pos.x - dragStartMouse.x) / W;
+      const dy = (pos.y - dragStartMouse.y) / H;
+
+      const c = { ...dragStartCrop };
+      const minSize = 0.15;
+
+      if (dragMode === 'move') {
+        const boxW = 1 - c.left - c.right;
+        const boxH = 1 - c.top - c.bottom;
+        const newLeft = Math.max(0, Math.min(1 - boxW, c.left + dx));
+        const newTop = Math.max(0, Math.min(1 - boxH, c.top + dy));
+        c.left = round4(newLeft);
+        c.right = round4(1 - newLeft - boxW);
+        c.top = round4(newTop);
+        c.bottom = round4(1 - newTop - boxH);
+      } else {
+        if (dragMode.includes('n')) {
+          c.top = round4(Math.max(0, Math.min(1 - c.bottom - minSize, c.top + dy)));
+        }
+        if (dragMode.includes('s')) {
+          c.bottom = round4(Math.max(0, Math.min(1 - c.top - minSize, c.bottom - dy)));
+        }
+        if (dragMode.includes('w')) {
+          c.left = round4(Math.max(0, Math.min(1 - c.right - minSize, c.left + dx)));
+        }
+        if (dragMode.includes('e')) {
+          c.right = round4(Math.max(0, Math.min(1 - c.left - minSize, c.right - dx)));
+        }
+      }
+
+      pagesData[currentPageIdx].crop = c;
+      syncInspectorFromPage();
+      renderActiveView();
+    });
+
+    editorCanvas.addEventListener('mousedown', (e) => {
+      if (!pdfDoc || e.button !== 0) return;
+      const pos = getCanvasMousePos(e);
+      const hit = hitTestHandle(pos.x, pos.y);
+      if (hit) {
+        dragMode = hit;
+        isInteracting = true;
+        dragStartMouse = pos;
+        dragStartCrop = { ...pagesData[currentPageIdx].crop };
+      }
+    });
+
+    window.addEventListener('mouseup', () => {
+      if (dragMode) {
+        dragMode = null;
+        isInteracting = false;
+        drawThumbnail(currentPageIdx);
+        renderActiveView();
+      }
+    });
+
+    // ============================================================================
+    // 8. Inspector Controls Binding & Synchronization
+    // ============================================================================
+    function syncInspectorFromPage() {
+      if (!pdfDoc || !pagesData[currentPageIdx]) return;
+      const p = pagesData[currentPageIdx];
+
+      document.getElementById('numCropTop').value = (p.crop.top * 100).toFixed(1);
+      document.getElementById('numCropBottom').value = (p.crop.bottom * 100).toFixed(1);
+      document.getElementById('numCropLeft').value = (p.crop.left * 100).toFixed(1);
+      document.getElementById('numCropRight').value = (p.crop.right * 100).toFixed(1);
+
+      document.getElementById('rngSkew').value = p.skewDeg;
+      document.getElementById('valSkew').textContent = `${p.skewDeg > 0 ? '+' : ''}${p.skewDeg.toFixed(2)}°`;
+
+      document.getElementById('rngWhiteLevel').value = p.filters.whiteLevel;
+      document.getElementById('valWhiteLevel').textContent = p.filters.whiteLevel === 255 ? '255 (Off)' : p.filters.whiteLevel;
+
+      document.getElementById('rngContrast').value = p.filters.contrast;
+      document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
+
+      document.getElementById('chkBinarize').checked = p.filters.binarize;
+    }
+
+    function onNumericCropChange() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      const top = clamp((parseFloat(document.getElementById('numCropTop').value) || 0) / 100, 0, 0.45);
+      const bottom = clamp((parseFloat(document.getElementById('numCropBottom').value) || 0) / 100, 0, 0.45);
+      const left = clamp((parseFloat(document.getElementById('numCropLeft').value) || 0) / 100, 0, 0.45);
+      const right = clamp((parseFloat(document.getElementById('numCropRight').value) || 0) / 100, 0, 0.45);
+
+      p.crop = { top: round4(top), bottom: round4(bottom), left: round4(left), right: round4(right) };
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+    }
+
+    function applyCropToScope(scope) {
+      if (!pdfDoc) return;
+      const srcCrop = { ...pagesData[currentPageIdx].crop };
+      const isCurOdd = (currentPageIdx % 2 === 0);
+
+      for (let i = 0; i < pagesData.length; i++) {
+        if (scope === 'all' || (scope === 'parity' && (i % 2 === 0) === isCurOdd)) {
+          pagesData[i].crop = { ...srcCrop };
+          drawThumbnail(i);
+        }
+      }
+      renderActiveView();
+      showToast(scope === 'all' ? 'Copied crop margins to all pages.' : `Copied crop margins to all ${isCurOdd ? 'odd' : 'even'} pages.`);
+    }
+
+    function onSkewSliderChange(val) {
+      if (!pdfDoc) return;
+      const deg = parseFloat(val) || 0;
+      pagesData[currentPageIdx].skewDeg = deg;
+      document.getElementById('valSkew').textContent = `${deg > 0 ? '+' : ''}${deg.toFixed(2)}°`;
+      cachedTransformed.pageIdx = -1;
+      isInteracting = true;
+      renderActiveView();
+      clearTimeout(window._skewTimer);
+      window._skewTimer = setTimeout(() => {
+        isInteracting = false;
+        renderActiveView();
+      }, 400);
+    }
+
+    function onFilterChange() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      p.filters.whiteLevel = parseInt(document.getElementById('rngWhiteLevel').value, 10);
+      p.filters.contrast = parseInt(document.getElementById('rngContrast').value, 10);
+      p.filters.binarize = document.getElementById('chkBinarize').checked;
+
+      document.getElementById('valWhiteLevel').textContent = p.filters.whiteLevel === 255 ? '255 (Off)' : p.filters.whiteLevel;
+      document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
+
+      // If user turns on pixel filters, suggest 600 DPI 1-Bit Monochrome if currently on native_lossless
+      if ((p.filters.whiteLevel < 255 || p.filters.contrast > 100 || p.filters.binarize) &&
+          document.getElementById('selExportMode').value === 'native_lossless') {
+        document.getElementById('selExportMode').value = 'mono_600';
+        onExportModeChange();
+      }
+
+      cachedTransformed.pageIdx = -1;
+      renderActiveView();
+    }
+
+    function applyFiltersToAllPages() {
+      if (!pdfDoc) return;
+      const curFilters = { ...pagesData[currentPageIdx].filters };
+      pagesData.forEach(p => {
+        p.filters = { ...curFilters };
+      });
+      cachedTransformed.pageIdx = -1;
+      renderActiveView();
+      showToast('Applied image cleanup settings to all pages.');
+    }
+
+    function updateSensitivityLabel(val) {
+      const v = parseInt(val, 10);
+      let desc = 'Medium';
+      if (v < 15) desc = 'High (Keep fine marks)';
+      else if (v > 38) desc = 'Low (Ignore specks)';
+      document.getElementById('valSensitivity').textContent = `${desc} (${v})`;
+    }
+
+    function onDetectConfigChange(reanalyzePixels = false) {
+      if (!pdfDoc) return;
+      if (reanalyzePixels) {
+        for (let i = 0; i < pagesData.length; i++) {
+          analyzePageInkBounds(pagesData[i]);
+        }
+      }
+      applyUniformScoreRightCropToPages();
+      for (let i = 0; i < pagesData.length; i++) {
+        drawThumbnail(i);
+      }
+      syncInspectorFromPage();
+      renderActiveView();
+    }
+
+    function setEqualOutputMargins() {
+      const v = document.getElementById('outMarginTop').value;
+      document.getElementById('outMarginBottom').value = v;
+      document.getElementById('outMarginLeft').value = v;
+      document.getElementById('outMarginRight').value = v;
+      onOutputConfigChange();
+    }
+
+    function onOutputConfigChange() {
+      const scaleMode = document.getElementById('selScaleMode').value;
+      const descEl = document.getElementById('scaleModeDesc');
+      if (scaleMode === 'uniform') {
+        descEl.textContent = '• Keeps a uniform scaling factor across all pages so staff sizes never jump from page to page.';
+      } else {
+        descEl.textContent = '• Scales each page’s cropped score individually to fill the target paper margins.';
+      }
+
+      const addPageNum = document.getElementById('chkAddPageNum').checked;
+      document.getElementById('rowStartPageNum').style.display = addPageNum ? 'flex' : 'none';
+
+      if (pdfDoc) renderActiveView();
+    }
+
+    function onExportModeChange() {
+      const mode = document.getElementById('selExportMode').value;
+      const desc = document.getElementById('exportModeDesc');
+      if (mode === 'native_lossless') {
+        desc.textContent = '• Preserves the exact original 600 DPI 1-bit JBIG2 stream without re-encoding. Zero quality loss & same tiny file size as the original scan!';
+      } else if (mode === 'mono_600') {
+        desc.textContent = '• Renders at full 600 DPI with your contrast/cleanup filters and compresses as a true 1-bit monochrome PDF stream (~1–1.5 MB).';
+      } else if (mode === 'mono_300') {
+        desc.textContent = '• Renders at 300 DPI with your contrast/cleanup filters as a true 1-bit monochrome PDF stream (~500–800 KB).';
+      } else {
+        desc.textContent = '• Renders at 300 DPI using 8-bit grayscale JPEG compression (useful for scores with continuous-tone photos).';
+      }
+    }
+
+    // ============================================================================
+    // 9. PDF Export Engines:
+    //    (A) Native 600 DPI Lossless PDF Stream Transform (Keeps JBIG2, ~600 KB!)
+    //    (B) 1-Bit Monochrome Deflate Packed Bitmap (300 / 600 DPI, ~550 KB - 1.2 MB)
+    //    (C) Grayscale JPEG
+    // ============================================================================
+    async function compressDeflate(uint8Data) {
+      const cs = new CompressionStream('deflate');
+      const writer = cs.writable.getWriter();
+      writer.write(uint8Data);
+      writer.close();
+      const resp = new Response(cs.readable);
+      const ab = await resp.arrayBuffer();
+      return new Uint8Array(ab);
+    }
+
+    async function packCanvasTo1BitFlateImage(pdfLibDoc, canvas) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      const rgba = ctx.getImageData(0, 0, w, h).data;
+
+      const rowBytes = (w + 7) >> 3;
+      const packed = new Uint8Array(rowBytes * h);
+
+      for (let y = 0; y < h; y++) {
+        const rgbaRowStart = y * w * 4;
+        const bitRowStart = y * rowBytes;
+        for (let x = 0; x < w; x++) {
+          const idx = rgbaRowStart + (x << 2);
+          // Luminance threshold at 175: < 175 is black (0), >= 175 is white (1)
+          const lum = (rgba[idx] * 77 + rgba[idx + 1] * 150 + rgba[idx + 2] * 29) >> 8;
+          if (lum >= 175) {
+            packed[bitRowStart + (x >> 3)] |= (0x80 >> (x & 7));
+          }
+        }
+      }
+
+      const compressed = await compressDeflate(packed);
+      const context = pdfLibDoc.context;
+      const dict = context.obj({
+        Type: 'XObject',
+        Subtype: 'Image',
+        Width: w,
+        Height: h,
+        ColorSpace: 'DeviceGray',
+        BitsPerComponent: 1,
+        Filter: 'FlateDecode',
+        Length: compressed.length
+      });
+      const stream = PDFLib.PDFRawStream.of(dict, compressed);
+      return context.register(stream);
+    }
+
+    async function exportNativeLosslessPdf(spec) {
+      const { PDFDocument, rgb, StandardFonts, degrees, pushGraphicsState, popGraphicsState, rectangle, clip, endPath } = PDFLib;
+      const srcDoc = await PDFDocument.load(rawPdfBytes);
+      const outDoc = await PDFDocument.create();
+      const fontBold = await outDoc.embedFont(StandardFonts.TimesRomanBold);
+
+      const srcPages = srcDoc.getPages();
+      const embeddedPages = await outDoc.embedPages(srcPages);
+      const ptPerMm = 72 / 25.4;
+      const targetPtW = spec.paper.widthMm * ptPerMm;
+      const targetPtH = spec.paper.heightMm * ptPerMm;
+      const maskCorners = document.getElementById('chkMaskCorners')?.checked;
+
+      for (let i = 0; i < pagesData.length; i++) {
+        const pct = Math.round(((i + 1) / pagesData.length) * 92);
+        showProgress('Exporting Lossless 600 DPI PDF...', `Transforming page ${i + 1} of ${pagesData.length} (Preserving native JBIG2 stream)`, pct);
+
+        const p = pagesData[i];
+        const srcPage = srcPages[i];
+        const embPage = embeddedPages[i];
+        const newPage = outDoc.addPage([targetPtW, targetPtH]);
+
+        // Read original page's CropBox (e.g., [44.14, 20.27, ...]) and /Rotate (e.g., 0 or 180 on even pages!)
+        // because PDF.js renders relative to the rotated CropBox, whereas pdf-lib embeds raw unrotated MediaBox coordinates.
+        const cropBox = srcPage.getCropBox();
+        const pageRotate = ((srcPage.getRotation().angle % 360) + 360) % 360;
+        const rawCenterX = cropBox.x + cropBox.width / 2;
+        const rawCenterY = cropBox.y + cropBox.height / 2;
+
+        const place = computePageTargetPlacement(i, spec);
+        const { isOdd, effLeftMm, effRightMm, cropPtW, cropPtH, drawWMm, drawHMm, destXMm, destYMm } = place;
+
+        // Convert destination box to PDF bottom-up points
+        const clipX = destXMm * ptPerMm;
+        const clipW = drawWMm * ptPerMm;
+        const clipH = drawHMm * ptPerMm;
+        const clipY = targetPtH - (destYMm * ptPerMm) - clipH;
+
+        const scaleS = clipW / cropPtW;
+
+        // Crop center in rotated CropBox space (PDF bottom-up coordinates, [0..origWidth] x [0..origHeight])
+        const sx = p.crop.left * p.origWidth;
+        const sy = p.crop.top * p.origHeight;
+        const sw = cropPtW;
+        const sh = cropPtH;
+
+        const cropCenterPdfX = sx + sw / 2;
+        const cropCenterPdfY = p.origHeight - (sy + sh / 2);
+
+        const destCenterPdfX = clipX + clipW / 2;
+        const destCenterPdfY = clipY + clipH / 2;
+
+        // Where the center of the rotated CropBox (origWidth/2, origHeight/2) lands on the target page
+        const targetCropBoxCenterX = destCenterPdfX + scaleS * (p.origWidth / 2 - cropCenterPdfX);
+        const targetCropBoxCenterY = destCenterPdfY + scaleS * (p.origHeight / 2 - cropCenterPdfY);
+
+        // Total clockwise rotation is original page /Rotate (0, 90, 180, 270) + user fine deskew (p.skewDeg)
+        const pdfDeg = -(pageRotate + p.skewDeg);
+        const theta = (pdfDeg * Math.PI) / 180;
+        const cosT = Math.cos(theta);
+        const sinT = Math.sin(theta);
+
+        // Map raw CropBox center (rawCenterX, rawCenterY) to (targetCropBoxCenterX, targetCropBoxCenterY)
+        const rotRawCx = rawCenterX * cosT - rawCenterY * sinT;
+        const rotRawCy = rawCenterX * sinT + rawCenterY * cosT;
+
+        const X0 = targetCropBoxCenterX - scaleS * rotRawCx;
+        const Y0 = targetCropBoxCenterY - scaleS * rotRawCy;
+
+        // Clip to the cropped rectangle on the target page, then draw embedded page
+        newPage.pushOperators(
+          pushGraphicsState(),
+          rectangle(clipX, clipY, clipW, clipH),
+          clip(),
+          endPath()
+        );
+
+        newPage.drawPage(embPage, {
+          x: X0,
+          y: Y0,
+          xScale: scaleS,
+          yScale: scaleS,
+          rotate: degrees(pdfDeg)
+        });
+
+        // If corner page number white-out mask is enabled, mask the top corners of the source page
+        if (maskCorners) {
+          const maskW = p.origWidth * 0.112 * scaleS;
+          const maskH = p.origHeight * 0.055 * scaleS;
+          const topY = targetCropBoxCenterY + scaleS * (p.origHeight / 2) - maskH;
+          const leftX = targetCropBoxCenterX - scaleS * (p.origWidth / 2);
+          const rightX = targetCropBoxCenterX + scaleS * (p.origWidth / 2) - maskW;
+          newPage.drawRectangle({ x: leftX, y: topY, width: maskW, height: maskH, color: rgb(1, 1, 1) });
+          newPage.drawRectangle({ x: rightX, y: topY, width: maskW, height: maskH, color: rgb(1, 1, 1) });
+        }
+
+        newPage.pushOperators(popGraphicsState());
+
+        // Optional clean new page number in outer top corner
+        if (spec.addPageNum) {
+          const pageNumStr = String(spec.startPageNum + i);
+          const fontSizePt = 10.5;
+          const textWidth = fontBold.widthOfTextAtSize(pageNumStr, fontSizePt);
+          const numYPt = targetPtH - Math.max(fontSizePt + 4, (spec.mTop * 0.72) * ptPerMm);
+          const numXPt = isOdd
+            ? (spec.paper.widthMm - effRightMm) * ptPerMm - textWidth
+            : effLeftMm * ptPerMm;
+
+          newPage.drawText(pageNumStr, {
+            x: numXPt,
+            y: numYPt,
+            size: fontSizePt,
+            font: fontBold,
+            color: rgb(0.07, 0.09, 0.15)
+          });
+        }
+      }
+
+      return await outDoc.save();
+    }
+
+    async function export1BitMonochromePdf(spec, dpi) {
+      const { PDFDocument, PDFName } = PDFLib;
+      const outDoc = await PDFDocument.create();
+
+      const ptPerMm = 72 / 25.4;
+      const targetPtW = spec.paper.widthMm * ptPerMm;
+      const targetPtH = spec.paper.heightMm * ptPerMm;
+
+      const targetPxW = Math.round((spec.paper.widthMm / 25.4) * dpi);
+      const targetPxH = Math.round((spec.paper.heightMm / 25.4) * dpi);
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = targetPxW;
+      outCanvas.height = targetPxH;
+
+      for (let i = 0; i < pagesData.length; i++) {
+        const pct = Math.round(((i + 1) / pagesData.length) * 92);
+        showProgress(`Rendering ${dpi} DPI 1-Bit Monochrome PDF...`, `Page ${i + 1} of ${pagesData.length}`, pct);
+        await sleep(15);
+
+        const page = await pdfDoc.getPage(i + 1);
+        const baseVp = page.getViewport({ scale: 1.0 });
+        const renderScale = Math.max(2.0, targetPxH / baseVp.height);
+        const hiVp = page.getViewport({ scale: renderScale });
+
+        const hiSourceCanvas = document.createElement('canvas');
+        hiSourceCanvas.width = Math.round(hiVp.width);
+        hiSourceCanvas.height = Math.round(hiVp.height);
+        const hiCtx = hiSourceCanvas.getContext('2d', { willReadFrequently: true });
+        hiCtx.fillStyle = '#ffffff';
+        hiCtx.fillRect(0, 0, hiSourceCanvas.width, hiSourceCanvas.height);
+
+        await page.render({ canvasContext: hiCtx, viewport: hiVp }).promise;
+
+        const hiTransformed = createTransformedCanvas(pagesData[i], hiSourceCanvas);
+        drawTargetPageToCanvas(i, outCanvas, hiTransformed, false);
+
+        const imageRef = await packCanvasTo1BitFlateImage(outDoc, outCanvas);
+        const pdfPage = outDoc.addPage([targetPtW, targetPtH]);
+        const imgKey = PDFName.of(`Im${i}`);
+        pdfPage.node.setXObject(imgKey, imageRef);
+
+        const { pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } = PDFLib;
+        pdfPage.pushOperators(
+          pushGraphicsState(),
+          concatTransformationMatrix(targetPtW, 0, 0, targetPtH, 0, 0),
+          drawObject(imgKey),
+          popGraphicsState()
+        );
+      }
+
+      return await outDoc.save();
+    }
+
+    async function exportJpegPdf(spec, dpi) {
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: [spec.paper.widthMm, spec.paper.heightMm],
+        compress: true
+      });
+
+      const targetPxW = Math.round((spec.paper.widthMm / 25.4) * dpi);
+      const targetPxH = Math.round((spec.paper.heightMm / 25.4) * dpi);
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = targetPxW;
+      outCanvas.height = targetPxH;
+
+      for (let i = 0; i < pagesData.length; i++) {
+        const pct = Math.round(((i + 1) / pagesData.length) * 92);
+        showProgress(`Rendering ${dpi} DPI JPEG PDF...`, `Page ${i + 1} of ${pagesData.length}`, pct);
+        await sleep(15);
+
+        if (i > 0) doc.addPage([spec.paper.widthMm, spec.paper.heightMm], 'portrait');
+
+        const page = await pdfDoc.getPage(i + 1);
+        const baseVp = page.getViewport({ scale: 1.0 });
+        const renderScale = Math.max(2.0, targetPxH / baseVp.height);
+        const hiVp = page.getViewport({ scale: renderScale });
+
+        const hiSourceCanvas = document.createElement('canvas');
+        hiSourceCanvas.width = Math.round(hiVp.width);
+        hiSourceCanvas.height = Math.round(hiVp.height);
+        const hiCtx = hiSourceCanvas.getContext('2d', { willReadFrequently: true });
+        hiCtx.fillStyle = '#ffffff';
+        hiCtx.fillRect(0, 0, hiSourceCanvas.width, hiSourceCanvas.height);
+
+        await page.render({ canvasContext: hiCtx, viewport: hiVp }).promise;
+
+        const hiTransformed = createTransformedCanvas(pagesData[i], hiSourceCanvas);
+        drawTargetPageToCanvas(i, outCanvas, hiTransformed, false);
+
+        const imgDataUrl = outCanvas.toDataURL('image/jpeg', 0.85);
+        doc.addImage(imgDataUrl, 'JPEG', 0, 0, spec.paper.widthMm, spec.paper.heightMm, undefined, 'FAST');
+      }
+
+      const ab = doc.output('arraybuffer');
+      return new Uint8Array(ab);
+    }
+
+    async function exportAdjustedPdf() {
+      if (!pdfDoc || pagesData.length === 0) return;
+
+      const spec = getOutputLayoutSpec();
+      const exportMode = document.getElementById('selExportMode').value;
+      let fileName = (document.getElementById('txtExportFilename').value || 'score_adjusted.pdf').trim();
+      if (!fileName.toLowerCase().endsWith('.pdf')) fileName += '.pdf';
+
+      let fileHandle = null;
+      if (window.showSaveFilePicker) {
+        try {
+          fileHandle = await window.showSaveFilePicker({
+            suggestedName: fileName,
+            types: [{
+              description: 'PDF Document (*.pdf)',
+              accept: { 'application/pdf': ['.pdf'] }
+            }]
+          });
+        } catch (err) {
+          if (err.name === 'AbortError') return;
+          console.warn('showSaveFilePicker fallback:', err);
+        }
+      }
+
+      try {
+        showProgress('Preparing PDF Export...', 'Initializing PDF builder', 5);
+        await sleep(25);
+
+        let pdfUint8 = null;
+        if (exportMode === 'native_lossless') {
+          pdfUint8 = await exportNativeLosslessPdf(spec);
+        } else if (exportMode === 'mono_600') {
+          pdfUint8 = await export1BitMonochromePdf(spec, 600);
+        } else if (exportMode === 'mono_300') {
+          pdfUint8 = await export1BitMonochromePdf(spec, 300);
+        } else {
+          pdfUint8 = await exportJpegPdf(spec, 300);
+        }
+
+        const sizeKb = Math.round(pdfUint8.byteLength / 1024);
+        showProgress('Saving File...', `Writing ${sizeKb} KB to disk`, 98);
+        await sleep(20);
+
+        const pdfBlob = new Blob([pdfUint8], { type: 'application/pdf' });
+
+        if (fileHandle) {
+          const writable = await fileHandle.createWritable();
+          await writable.write(pdfBlob);
+          await writable.close();
+          hideProgress();
+          showToast(`✅ Saved '${fileHandle.name}' (${sizeKb} KB)!`);
+        } else {
+          const url = URL.createObjectURL(pdfBlob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+          hideProgress();
+          showToast(`✅ Downloaded '${fileName}' (${sizeKb} KB)!`);
+        }
+      } catch (err) {
+        console.error(err);
+        hideProgress();
+        alert('Error exporting PDF: ' + err.message);
+      }
+    }
+
+    // ============================================================================
+    // 10. Utility Helpers
+    // ============================================================================
+    function round4(n) {
+      return Math.round(n * 10000) / 10000;
+    }
+
+    function clamp(val, min, max) {
+      return Math.max(min, Math.min(max, val));
+    }
+
+    function sleep(ms) {
+      return new Promise(resolve => setTimeout(resolve, ms));
+    }
+
+    function showProgress(title, subtitle, pct) {
+      const overlay = document.getElementById('progressOverlay');
+      overlay.style.display = 'flex';
+      document.getElementById('progressTitle').textContent = title;
+      document.getElementById('progressSubtitle').textContent = subtitle;
+      document.getElementById('progressBarFill').style.width = `${pct}%`;
+    }
+
+    function hideProgress() {
+      document.getElementById('progressOverlay').style.display = 'none';
+    }
+
+    function showToast(msg) {
+      const t = document.getElementById('toastBox');
+      t.textContent = msg;
+      t.classList.add('show');
+      clearTimeout(window._toastTimer);
+      window._toastTimer = setTimeout(() => {
+        t.classList.remove('show');
+      }, 3400);
+    }
+  </script>
+</body>
+</html>

@@ -800,6 +800,27 @@
         <button class="btn btn-sm" onclick="unifyCropSizeAcrossPages()" title="Unifies the crop width & height across all pages and auto-centers each box on the detected music score">
           📏 Unify Crop Width & Height Across All Pages
         </button>
+
+        <!-- Score Right Anchor (Manual & Auto Adjustment) -->
+        <div style="background: rgba(15, 23, 42, 0.65); border: 1px solid rgba(245, 158, 11, 0.4); border-radius: 8px; padding: 9px 10px; margin-top: 5px; display: flex; flex-direction: column; gap: 6px;">
+          <div class="control-row">
+            <span class="control-label" style="color:#f59e0b; font-weight:700;">⚓ Score Right Anchor</span>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <input type="number" id="numScoreRight" min="40" max="99" step="0.1" value="92.0" style="width:65px; text-align:center; border-color: rgba(245, 158, 11, 0.5);" onchange="onManualScoreRightChange(this.value)" />
+              <span style="font-size:0.75rem; color:var(--text-muted);">%</span>
+            </div>
+          </div>
+          <div class="section-subtitle" style="font-size:0.71rem; color:#cbd5e1; line-height:1.35;">
+            • Drag the <b>amber dashed line (⚓)</b> on the canvas left/right or adjust % above.
+          </div>
+          <div class="grid-2" style="margin-top:2px;">
+            <button class="btn btn-sm" onclick="reDetectScoreRightCurrentPage()" title="Re-detect score right edge for current page">📐 Re-detect Right</button>
+            <button class="btn btn-sm" onclick="applyScoreRightToAllPages('all')" title="Copy current score right anchor to all pages">Copy Anchor to All</button>
+          </div>
+          <button class="btn btn-sm" onclick="alignCropToScoreRight()" style="font-size:0.72rem; padding:4px;" title="Set right crop boundary exactly to Anchor + Padding">
+            ⇥ Set Right Crop to Anchor + Padding
+          </button>
+        </div>
       </div>
 
       <!-- 2. Fine Crop Adjustment & Batch Sync -->
@@ -1360,8 +1381,8 @@
       let fullLeftPx = w - edgeSkipX;
       let fullRightPx = edgeSkipX;
 
-      let foundScore = false;
       let foundAny = false;
+      const staffColInk = new Int32Array(w);
 
       for (let y = edgeSkipY; y < h - edgeSkipY; y++) {
         const inkRowOffset = y * w;
@@ -1386,9 +1407,7 @@
             if (y > fullBottomPx) fullBottomPx = y;
 
             if (inStaffBand) {
-              foundScore = true;
-              if (x < scoreLeftPx) scoreLeftPx = x;
-              if (x > scoreRightPx) scoreRightPx = x;
+              staffColInk[x]++;
             }
 
             if (!isCornerZone(x, y)) {
@@ -1398,6 +1417,31 @@
               if (y > noCornerBottomPx) noCornerBottomPx = y;
             }
           }
+        }
+      }
+
+      // Robust Staff Right/Left Barline detection:
+      // Music staves have multiple horizontal lines + vertical barlines,
+      // so real staff ends have significant vertical ink in the column (>= minBarlineInk).
+      // This filters out stray dust or smudges in the right margin.
+      const minBarlineInk = Math.max(4, Math.round(sensitivity / 4));
+      let foundStaffRight = false;
+      for (let x = w - edgeSkipX - 1; x >= Math.round(w * 0.35); x--) {
+        const colDensity = staffColInk[x] + (staffColInk[x - 1] || 0) + (staffColInk[x + 1] || 0);
+        if (colDensity >= minBarlineInk) {
+          scoreRightPx = x;
+          foundStaffRight = true;
+          break;
+        }
+      }
+
+      let foundStaffLeft = false;
+      for (let x = edgeSkipX; x <= Math.min(scoreRightPx - 50, Math.round(w * 0.65)); x++) {
+        const colDensity = staffColInk[x] + (staffColInk[x - 1] || 0) + (staffColInk[x + 1] || 0);
+        if (colDensity >= minBarlineInk) {
+          scoreLeftPx = x;
+          foundStaffLeft = true;
+          break;
         }
       }
 
@@ -1413,9 +1457,11 @@
         return pageObj.rawBounds;
       }
 
-      if (!foundScore || scoreRightPx <= scoreLeftPx) {
-        scoreLeftPx = noCornerLeftPx;
+      if (!foundStaffRight || scoreRightPx <= scoreLeftPx) {
         scoreRightPx = noCornerRightPx;
+      }
+      if (!foundStaffLeft || scoreLeftPx >= scoreRightPx) {
+        scoreLeftPx = noCornerLeftPx;
       }
 
       const bounds = {
@@ -1779,16 +1825,39 @@
       editorCtx.lineTo(gxMid, cy2);
       editorCtx.stroke();
 
-      // Draw detected Music Score Right Edge reference line (amber dashed line)
+      // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badges)
       if (typeof p.scoreRight === 'number') {
         const scoreRx = Math.round(p.scoreRight * W);
-        editorCtx.strokeStyle = 'rgba(245, 158, 11, 0.75)';
-        editorCtx.lineWidth = 1.5;
+        const isDraggingAnchor = (dragMode === 'score-right');
+        editorCtx.strokeStyle = isDraggingAnchor ? '#fbbf24' : 'rgba(245, 158, 11, 0.85)';
+        editorCtx.lineWidth = isDraggingAnchor ? 2.5 : 1.8;
         editorCtx.setLineDash([5, 3]);
         editorCtx.beginPath();
-        editorCtx.moveTo(scoreRx, cy1);
-        editorCtx.lineTo(scoreRx, cy2);
+        editorCtx.moveTo(scoreRx, Math.max(0, cy1 - 14));
+        editorCtx.lineTo(scoreRx, Math.min(H, cy2 + 14));
         editorCtx.stroke();
+
+        // Top & Bottom Anchor Badges
+        editorCtx.setLineDash([]);
+        editorCtx.fillStyle = '#f59e0b';
+        editorCtx.strokeStyle = '#78350f';
+        editorCtx.lineWidth = 1.5;
+        // Top badge:
+        editorCtx.beginPath();
+        editorCtx.rect(scoreRx - 5, Math.max(0, cy1 - 12), 10, 10);
+        editorCtx.fill();
+        editorCtx.stroke();
+        // Bottom badge:
+        editorCtx.beginPath();
+        editorCtx.rect(scoreRx - 5, Math.min(H - 10, cy2 + 2), 10, 10);
+        editorCtx.fill();
+        editorCtx.stroke();
+
+        // Anchor text label
+        editorCtx.fillStyle = '#f59e0b';
+        editorCtx.font = 'bold 11px sans-serif';
+        editorCtx.textAlign = 'center';
+        editorCtx.fillText(`⚓ ${(p.scoreRight * 100).toFixed(1)}%`, scoreRx, Math.max(12, cy1 - 16));
       }
       editorCtx.restore();
 
@@ -2138,6 +2207,15 @@
       const x2 = (1 - p.crop.right) * W;
       const y2 = (1 - p.crop.bottom) * H;
 
+      // 1. Test Score Right Anchor line (within 8px horizontally)
+      if (typeof p.scoreRight === 'number') {
+        const scoreRx = p.scoreRight * W;
+        if (Math.abs(mx - scoreRx) <= 8 && my >= y1 - 18 && my <= y2 + 18) {
+          return 'score-right';
+        }
+      }
+
+      // 2. Test 8 crop handles
       const handles = getHandlePositions(x1, y1, x2, y2);
       const hitDist = 10;
       for (const [name, pos] of Object.entries(handles)) {
@@ -2161,7 +2239,8 @@
       ne: 'nesw-resize', sw: 'nesw-resize',
       n: 'ns-resize', s: 'ns-resize',
       e: 'ew-resize', w: 'ew-resize',
-      move: 'move'
+      move: 'move',
+      'score-right': 'col-resize'
     };
 
     editorCanvas.addEventListener('mousemove', (e) => {
@@ -2176,6 +2255,18 @@
 
       const W = editorCanvas.width;
       const H = editorCanvas.height;
+      const p = pagesData[currentPageIdx];
+
+      // Dragging the amber Score Right Anchor directly
+      if (dragMode === 'score-right') {
+        const newSr = clamp(pos.x / W, p.crop.left + 0.05, 0.995);
+        p.scoreRight = round4(newSr);
+        const srEl = document.getElementById('numScoreRight');
+        if (srEl) srEl.value = (p.scoreRight * 100).toFixed(1);
+        renderActiveView();
+        return;
+      }
+
       const dx = (pos.x - dragStartMouse.x) / W;
       const dy = (pos.y - dragStartMouse.y) / H;
 
@@ -2225,6 +2316,7 @@
 
     window.addEventListener('mouseup', () => {
       if (dragMode) {
+        const wasScoreRight = (dragMode === 'score-right');
         dragMode = null;
         isInteracting = false;
         drawThumbnail(currentPageIdx);
@@ -2244,6 +2336,11 @@
       document.getElementById('numCropLeft').value = (p.crop.left * 100).toFixed(1);
       document.getElementById('numCropRight').value = (p.crop.right * 100).toFixed(1);
 
+      if (typeof p.scoreRight === 'number') {
+        const srEl = document.getElementById('numScoreRight');
+        if (srEl) srEl.value = (p.scoreRight * 100).toFixed(1);
+      }
+
       document.getElementById('rngSkew').value = p.skewDeg;
       document.getElementById('valSkew').textContent = `${p.skewDeg > 0 ? '+' : ''}${p.skewDeg.toFixed(2)}°`;
 
@@ -2254,6 +2351,53 @@
       document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
 
       document.getElementById('chkBinarize').checked = p.filters.binarize;
+    }
+
+    function onManualScoreRightChange(val) {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      const parsed = parseFloat(val);
+      if (isNaN(parsed)) return;
+      p.scoreRight = round4(clamp(parsed / 100, p.crop.left + 0.05, 0.995));
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+    }
+
+    function reDetectScoreRightCurrentPage() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      p.rawBounds = null;
+      analyzePageInkBounds(p);
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      showToast(`Re-detected score right edge for Page ${currentPageIdx + 1} (${(p.scoreRight * 100).toFixed(1)}%).`);
+    }
+
+    function applyScoreRightToAllPages(scope = 'all') {
+      if (!pdfDoc) return;
+      const targetSr = pagesData[currentPageIdx].scoreRight;
+      const isCurOdd = (currentPageIdx % 2 === 0);
+      for (let i = 0; i < pagesData.length; i++) {
+        if (scope === 'all' || (scope === 'parity' && (i % 2 === 0) === isCurOdd)) {
+          pagesData[i].scoreRight = targetSr;
+          drawThumbnail(i);
+        }
+      }
+      renderActiveView();
+      showToast(`Applied Score Right Anchor (${(targetSr * 100).toFixed(1)}%) to all pages.`);
+    }
+
+    function alignCropToScoreRight() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      const padPct = (parseFloat(document.getElementById('rngAutoPad').value) || 1.8) / 100;
+      const targetRight = Math.min(0.999, p.scoreRight + padPct);
+      p.crop.right = round4(1 - targetRight);
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      showToast(`Right crop aligned to Score Right + ${(padPct * 100).toFixed(1)}% padding.`);
     }
 
     function onNumericCropChange() {
@@ -2287,7 +2431,8 @@
     function onSkewSliderChange(val) {
       if (!pdfDoc) return;
       const deg = parseFloat(val) || 0;
-      pagesData[currentPageIdx].skewDeg = deg;
+      const p = pagesData[currentPageIdx];
+      p.skewDeg = deg;
       document.getElementById('valSkew').textContent = `${deg > 0 ? '+' : ''}${deg.toFixed(2)}°`;
       cachedTransformed.pageIdx = -1;
       isInteracting = true;
@@ -2295,8 +2440,12 @@
       clearTimeout(window._skewTimer);
       window._skewTimer = setTimeout(() => {
         isInteracting = false;
+        // Automatically re-detect score boundaries on newly rotated page
+        p.rawBounds = null;
+        analyzePageInkBounds(p);
+        syncInspectorFromPage();
         renderActiveView();
-      }, 400);
+      }, 350);
     }
 
     function onFilterChange() {

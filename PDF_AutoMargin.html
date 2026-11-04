@@ -332,10 +332,13 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      padding: 18px;
+      justify-content: flex-start;
+      padding: 10px 14px 14px 14px;
+      gap: 6px;
       position: relative;
       overflow: hidden;
+      min-width: 0;
+      min-height: 0;
     }
 
     .pane + .pane {
@@ -343,31 +346,38 @@
     }
 
     .pane-title {
-      position: absolute;
-      top: 10px;
-      left: 14px;
-      background: rgba(15, 23, 42, 0.88);
+      flex-shrink: 0;
+      align-self: flex-start;
+      background: rgba(15, 23, 42, 0.9);
       border: 1px solid var(--border);
-      padding: 4px 10px;
+      padding: 3px 10px;
       border-radius: 6px;
-      font-size: 0.75rem;
+      font-size: 0.74rem;
       font-weight: 600;
       color: #cbd5e1;
-      z-index: 10;
       pointer-events: none;
       display: flex;
       align-items: center;
       gap: 6px;
+      max-width: 100%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .canvas-container {
+      flex: 1;
+      min-height: 0;
       position: relative;
       display: flex;
       align-items: center;
       justify-content: center;
       max-width: 100%;
       max-height: 100%;
-      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    #editorCanvas, #previewCanvas {
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.6);
     }
 
     #editorCanvas {
@@ -807,20 +817,19 @@
 
     body.mobile-mode .pane,
     body.is-mobile-device .pane {
-      padding: 6px;
+      padding: 4px 6px 6px 6px;
+      gap: 4px;
     }
 
     body.mobile-mode .pane-title,
     body.is-mobile-device .pane-title {
-      top: 6px;
-      left: 8px;
       padding: 2px 7px;
-      font-size: 0.68rem;
+      font-size: 0.66rem;
     }
 
     body.mobile-mode .canvas-container,
     body.is-mobile-device .canvas-container {
-      padding: 2px;
+      padding: 0;
     }
 
     /* Mobile Full UI (body.is-mobile-device:not(.mobile-mode)) responsive Drawer/Sheet layout */
@@ -3042,10 +3051,11 @@
     function renderEditorCanvas() {
       const pane = document.getElementById('editorPane');
       const isMob = isMobileUiMode || document.body.classList.contains('is-mobile-device');
-      const padX = isMob ? 12 : 36;
-      const padY = isMob ? 24 : 46;
-      const availW = Math.max(120, pane.clientWidth - padX);
-      const availH = Math.max(120, pane.clientHeight - padY);
+      const titleH = pane.querySelector('.pane-title')?.offsetHeight || 24;
+      const padX = isMob ? 12 : 28;
+      const padY = (isMob ? 16 : 32) + titleH;
+      const availW = Math.max(100, pane.clientWidth - padX);
+      const availH = Math.max(100, pane.clientHeight - padY);
 
       const p = pagesData[currentPageIdx];
       const transCanvas = getActiveTransformedCanvas();
@@ -3441,10 +3451,11 @@
     function renderPreviewCanvas() {
       const pane = document.getElementById('previewPane');
       const isMob = isMobileUiMode || document.body.classList.contains('is-mobile-device');
-      const padX = isMob ? 12 : 36;
-      const padY = isMob ? 24 : 46;
-      const availW = Math.max(120, pane.clientWidth - padX);
-      const availH = Math.max(120, pane.clientHeight - padY);
+      const titleH = pane.querySelector('.pane-title')?.offsetHeight || 24;
+      const padX = isMob ? 12 : 28;
+      const padY = (isMob ? 16 : 32) + titleH;
+      const availW = Math.max(100, pane.clientWidth - padX);
+      const availH = Math.max(100, pane.clientHeight - padY);
 
       const spec = getOutputLayoutSpec();
       const aspect = spec.paper.widthMm / spec.paper.heightMm;

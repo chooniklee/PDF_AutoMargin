@@ -743,10 +743,6 @@
     /* ==========================================================================
        Mobile Browser UI (Simple Mode: body.mobile-mode & Full Mode: body.is-mobile-device)
        ========================================================================== */
-    #btnDeskewAllHeader {
-      display: none;
-    }
-
     body.mobile-mode .sidebar-left,
     body.mobile-mode .sidebar-right,
     body.mobile-mode .header-center,
@@ -756,11 +752,6 @@
     body.is-mobile-device .header-center,
     body.is-mobile-device .stage-hint {
       display: none !important;
-    }
-
-    body.mobile-mode #btnDeskewAllHeader,
-    body.is-mobile-device #btnDeskewAllHeader {
-      display: inline-flex !important;
     }
 
     body.is-mobile-device .mobile-inspector-bar {
@@ -933,7 +924,6 @@
       <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" />
       <button class="btn" onclick="document.getElementById('pdfFileInput').click()">📂 Open PDF</button>
       <button class="btn" id="btnUnrollAllHeader" style="border-color:#0ea5e9; color:#38bdf8;" onclick="autoDewarpAllPages()" disabled>🌊 Auto-Unroll All</button>
-      <button class="btn" id="btnDeskewAllHeader" style="border-color:#818cf8; color:#a5b4fc;" onclick="autoDeskewAllPages()" disabled>📐 Auto-Deskew All</button>
       <button class="btn btn-primary" id="btnAutoAll" onclick="autoDetectAllPages()" disabled>✨ Auto-Crop All Pages</button>
       <button class="btn" id="btnPreviewPdfHeader" style="border-color:#10b981; color:#6ee7b7;" onclick="previewAdjustedPdfInNewTab()" disabled title="Open adjusted PDF in a new browser tab">👁️ Open PDF Tab</button>
       <button class="btn btn-success" id="btnExportPdf" onclick="exportAdjustedPdf()" disabled>💾 Save As PDF</button>
@@ -1143,15 +1133,10 @@
         </div>
 
         <div class="control-row">
-          <span class="control-label">Fine Rotation (Deskew)</span>
+          <span class="control-label">Fine Rotation (Manual)</span>
           <span class="control-value" id="valSkew">0.00°</span>
         </div>
         <input type="range" id="rngSkew" min="-4" max="4" step="0.05" value="0" oninput="onSkewSliderChange(this.value)" />
-
-        <div class="grid-2">
-          <button class="btn btn-sm" onclick="autoDeskewCurrentPage()">📐 Auto-Deskew Page</button>
-          <button class="btn btn-sm" onclick="autoDeskewAllPages()">📐 Auto-Deskew All</button>
-        </div>
 
         <div class="control-row" style="margin-top:4px;">
           <span class="control-label">White Point (Background Cleanup)</span>
@@ -2854,6 +2839,7 @@
         p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
       }
       p.dewarp.enabled = true;
+      p.skewDeg = 0; // Unroll implicitly straightens global tilt as well as spine curvature
       document.getElementById('chkShowStaffOverlay').checked = true;
       cachedTransformed.pageIdx = -1;
       computeAutoCropForPage(p);
@@ -2862,7 +2848,7 @@
       renderActiveView();
       const nStaves = p.dewarp.data.staves.length;
       const maxPx = p.dewarp.data.maxPageWarpPx.toFixed(1);
-      showToast(`🌊 Page ${currentPageIdx + 1} unrolled! (${nStaves} staves straightened, max curve ${maxPx}px → flat)`);
+      showToast(`🌊 Page ${currentPageIdx + 1} unrolled & deskewed! (${nStaves} staves straightened, max curve ${maxPx}px → flat)`);
     }
 
     async function autoDewarpAllPages() {
@@ -2877,6 +2863,7 @@
           p.dewarp.data = detectStaffCurvesFromCanvas(p.workCanvas);
         }
         p.dewarp.enabled = true;
+        p.skewDeg = 0; // Unroll implicitly straightens global tilt as well as spine curvature
         analyzePageInkBounds(p);
       }
       document.getElementById('chkShowStaffOverlay').checked = true;
@@ -2888,7 +2875,7 @@
       syncInspectorFromPage();
       renderActiveView();
       hideProgress();
-      showToast(`🌊 All ${pagesData.length} pages unrolled and auto-cropped to straightened staves!`);
+      showToast(`🌊 All ${pagesData.length} pages unrolled, deskewed, and auto-cropped!`);
     }
 
     function onToggleDewarpEnabled(checked) {

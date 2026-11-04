@@ -718,6 +718,46 @@
       padding: 6px;
     }
 
+    /* Allow vertical document scroll in Mobile Landscape so iOS Safari collapses the URL/tab bar into Fullscreen Mode,
+       while keeping header and workspace pinned via position: sticky so the UI never scrolls off-screen! */
+    html:has(body.mobile-mode:not(.force-landscape-rot)) {
+      height: auto;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+
+    body.mobile-mode:not(.force-landscape-rot) {
+      height: auto;
+      min-height: calc(100vh + 100px);
+      min-height: calc(100lvh + 100px);
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    body.mobile-mode:not(.force-landscape-rot) header {
+      position: sticky;
+      top: 0;
+      z-index: 60;
+    }
+
+    body.mobile-mode:not(.force-landscape-rot) .workspace {
+      position: sticky;
+      top: 48px;
+      height: calc(100vh - 48px);
+      height: calc(100dvh - 48px);
+      flex: none;
+    }
+
+    body.mobile-mode .dropzone-box {
+      padding: 20px 24px;
+      gap: 8px;
+    }
+
+    body.mobile-mode .dropzone-icon {
+      font-size: 2rem;
+    }
+
     /* When on a mobile phone in portrait orientation (or with iOS Portrait Lock on),
        automatically rotate the entire workspace 90deg into Landscape Mode! */
     body.mobile-mode.force-landscape-rot {
@@ -1226,6 +1266,13 @@
       updateMobileLandscapeState();
       if (pdfDoc) renderActiveView();
     });
+
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', () => {
+        updateMobileLandscapeState();
+        if (pdfDoc) renderActiveView();
+      });
+    }
 
     window.addEventListener('orientationchange', () => {
       setTimeout(() => {
@@ -3317,7 +3364,8 @@
       if (my >= y1 && my <= y2 && Math.abs(mx - x1) <= edgeTol) return 'w';
       if (my >= y1 && my <= y2 && Math.abs(mx - x2) <= edgeTol) return 'e';
 
-      if (mx > x1 && mx < x2 && my > y1 && my < y2) {
+      // On touch devices, only capture handles, edges, and the score-right anchor line so vertical swipes inside the score can scroll into iOS Safari Fullscreen mode
+      if (!isTouch && mx > x1 && mx < x2 && my > y1 && my < y2) {
         return 'move';
       }
       return null;

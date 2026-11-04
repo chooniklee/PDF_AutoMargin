@@ -495,6 +495,16 @@
       display: flex;
       flex-direction: column;
       gap: 9px;
+      transition: background 0.15s;
+    }
+
+    .control-section.collapsed {
+      padding: 10px 16px;
+      gap: 0;
+    }
+
+    .control-section.collapsed > :not(.section-title) {
+      display: none !important;
     }
 
     .section-title {
@@ -504,6 +514,69 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      cursor: pointer;
+      user-select: none;
+      padding: 2px 0;
+    }
+
+    .section-title:hover {
+      color: #93c5fd;
+    }
+
+    .sec-chevron {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      transition: transform 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      background: rgba(15, 23, 42, 0.55);
+      border: 1px solid var(--border);
+    }
+
+    .control-section.collapsed .sec-chevron {
+      transform: rotate(-90deg);
+    }
+
+    .mobile-inspector-bar {
+      display: none;
+      padding: 8px 12px;
+      background: #0f172a;
+      border-bottom: 1px solid var(--border);
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      position: sticky;
+      top: 0;
+      z-index: 15;
+    }
+
+    .mobile-view-pills {
+      display: flex;
+      gap: 4px;
+      background: var(--bg-panel);
+      padding: 3px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .mobile-view-pill {
+      background: transparent;
+      color: var(--text-muted);
+      border: none;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .mobile-view-pill.active {
+      background: var(--accent);
+      color: #fff;
     }
 
     .section-subtitle {
@@ -658,7 +731,7 @@
     }
 
     /* ==========================================================================
-       Mobile Browser Streamlined UI (body.mobile-mode — Portrait & Landscape)
+       Mobile Browser UI (Simple Mode: body.mobile-mode & Full Mode: body.is-mobile-device)
        ========================================================================== */
     #btnDeskewAllHeader {
       display: none;
@@ -668,15 +741,24 @@
     body.mobile-mode .sidebar-right,
     body.mobile-mode .header-center,
     body.mobile-mode #btnAutoAll,
-    body.mobile-mode .stage-hint {
+    body.mobile-mode .stage-hint,
+    body.is-mobile-device .sidebar-left,
+    body.is-mobile-device .header-center,
+    body.is-mobile-device .stage-hint {
       display: none !important;
     }
 
-    body.mobile-mode #btnDeskewAllHeader {
+    body.mobile-mode #btnDeskewAllHeader,
+    body.is-mobile-device #btnDeskewAllHeader {
       display: inline-flex !important;
     }
 
-    body.mobile-mode header {
+    body.is-mobile-device .mobile-inspector-bar {
+      display: flex;
+    }
+
+    body.mobile-mode header,
+    body.is-mobile-device header {
       height: 48px;
       padding: 0 10px;
       gap: 6px;
@@ -686,53 +768,75 @@
       z-index: 60;
     }
 
-    body.mobile-mode .brand span {
+    body.mobile-mode .brand span,
+    body.is-mobile-device .brand span {
       display: none;
     }
 
-    body.mobile-mode .file-status {
-      max-width: 130px;
-      font-size: 0.74rem;
+    body.mobile-mode .file-status,
+    body.is-mobile-device .file-status {
+      max-width: 120px;
+      font-size: 0.73rem;
       padding: 4px 8px;
     }
 
-    body.mobile-mode .header-actions {
+    body.mobile-mode .header-actions,
+    body.is-mobile-device .header-actions {
       gap: 6px;
       flex-shrink: 0;
     }
 
-    body.mobile-mode .btn {
+    body.mobile-mode .btn,
+    body.is-mobile-device header .btn {
       padding: 6px 10px;
-      font-size: 0.76rem;
+      font-size: 0.75rem;
     }
 
-    body.mobile-mode .stage-toolbar {
-      height: 36px;
+    body.mobile-mode .stage-toolbar,
+    body.is-mobile-device .stage-toolbar {
+      height: 34px;
       padding: 0 10px;
       justify-content: center;
     }
 
-    body.mobile-mode .stage-content {
+    body.mobile-mode .stage-content,
+    body.is-mobile-device .stage-content {
       padding: 6px;
       gap: 6px;
     }
 
-    body.mobile-mode .pane {
+    body.mobile-mode .pane,
+    body.is-mobile-device .pane {
       padding: 6px;
     }
 
-    body.mobile-mode .pane-title {
+    body.mobile-mode .pane-title,
+    body.is-mobile-device .pane-title {
       top: 6px;
       left: 8px;
       padding: 2px 7px;
       font-size: 0.68rem;
     }
 
-    body.mobile-mode .canvas-container {
+    body.mobile-mode .canvas-container,
+    body.is-mobile-device .canvas-container {
       padding: 2px;
     }
 
-    /* In Portrait orientation on mobile, stack the two panes vertically so each score page is wide and large */
+    /* Mobile Full UI (body.is-mobile-device:not(.mobile-mode)) responsive Drawer/Sheet layout */
+    body.is-mobile-device:not(.mobile-mode) .sidebar-right {
+      width: 285px;
+      box-shadow: -4px 0 18px rgba(0, 0, 0, 0.35);
+    }
+
+    body.is-mobile-device:not(.mobile-mode) .control-section {
+      padding: 10px 12px;
+      gap: 7px;
+    }
+
+    /* In Portrait orientation on mobile:
+       - Simple UI stacks the two score panes vertically
+       - Full UI puts the live score stage on top and the collapsible Accordion Inspector Sheet on the bottom! */
     @media (orientation: portrait) {
       body.mobile-mode .stage-content {
         flex-direction: column;
@@ -741,17 +845,34 @@
         border-left: none;
         border-top: 1px solid var(--border);
       }
+
+      body.is-mobile-device:not(.mobile-mode) .workspace {
+        flex-direction: column;
+      }
+      body.is-mobile-device:not(.mobile-mode) .stage {
+        flex: 1;
+        min-height: 46%;
+      }
+      body.is-mobile-device:not(.mobile-mode) .sidebar-right {
+        width: 100%;
+        max-height: 50%;
+        border-left: none;
+        border-top: 2px solid var(--accent);
+        box-shadow: 0 -6px 20px rgba(0, 0, 0, 0.45);
+      }
     }
 
     /* Allow vertical document scroll on Mobile so iOS Safari collapses the URL/tab bar into Fullscreen Mode,
        while keeping header and workspace pinned via position: sticky so the UI never scrolls off-screen! */
-    html:has(body.mobile-mode) {
+    html:has(body.mobile-mode),
+    html:has(body.is-mobile-device) {
       height: auto;
       overflow-y: auto;
       overflow-x: hidden;
     }
 
-    body.mobile-mode {
+    body.mobile-mode,
+    body.is-mobile-device {
       height: auto;
       min-height: calc(100vh + 100px);
       min-height: calc(100lvh + 100px);
@@ -760,7 +881,8 @@
       -webkit-overflow-scrolling: touch;
     }
 
-    body.mobile-mode .workspace {
+    body.mobile-mode .workspace,
+    body.is-mobile-device .workspace {
       position: sticky;
       top: 48px;
       height: calc(100vh - 48px);
@@ -768,12 +890,14 @@
       flex: none;
     }
 
-    body.mobile-mode .dropzone-box {
+    body.mobile-mode .dropzone-box,
+    body.is-mobile-device .dropzone-box {
       padding: 20px 24px;
       gap: 8px;
     }
 
-    body.mobile-mode .dropzone-icon {
+    body.mobile-mode .dropzone-icon,
+    body.is-mobile-device .dropzone-icon {
       font-size: 2rem;
     }
   </style>
@@ -885,10 +1009,22 @@
     <!-- Right Controls Sidebar -->
     <aside class="sidebar-right">
 
+      <!-- Mobile Full UI Quick View Switcher & Accordion Controls -->
+      <div class="mobile-inspector-bar">
+        <div class="mobile-view-pills">
+          <button class="mobile-view-pill active" data-view="split" onclick="setViewMode('split')">Split</button>
+          <button class="mobile-view-pill" data-view="editor" onclick="setViewMode('editor')">Crop</button>
+          <button class="mobile-view-pill" data-view="preview" onclick="setViewMode('preview')">Result</button>
+          <button class="mobile-view-pill" data-view="grid" onclick="setViewMode('grid')">Grid</button>
+        </div>
+        <button class="btn btn-sm" id="btnToggleAllSections" onclick="toggleAllInspectorSections()" style="padding:4px 7px; font-size:0.7rem;">Expand All</button>
+      </div>
+
       <!-- 1. Semi-Auto Margin Detection -->
-      <div class="control-section">
-        <div class="section-title">
+      <div class="control-section" id="secMarginDetect">
+        <div class="section-title" onclick="toggleControlSection(this.parentElement)">
           <span>1. Semi-Auto Margin Detection</span>
+          <span class="sec-chevron">▾</span>
         </div>
         <div class="section-subtitle">
           Automatically detects the ink bounding box of the music score.
@@ -927,9 +1063,10 @@
       </div>
 
       <!-- 2. Fine Crop Adjustment & Batch Sync -->
-      <div class="control-section">
-        <div class="section-title">
+      <div class="control-section" id="secFineCrop">
+        <div class="section-title" onclick="toggleControlSection(this.parentElement)">
           <span>2. Fine Crop Margins & Batch Sync</span>
+          <span class="sec-chevron">▾</span>
         </div>
         <div class="grid-4">
           <div class="num-field">
@@ -957,9 +1094,10 @@
       </div>
 
       <!-- 3. Deskew, Staff Unroll & Image Enhancement -->
-      <div class="control-section">
-        <div class="section-title">
+      <div class="control-section" id="secCleanup">
+        <div class="section-title" onclick="toggleControlSection(this.parentElement)">
           <span>3. Unroll (Dewarp), Deskew & Cleanup</span>
+          <span class="sec-chevron">▾</span>
         </div>
 
         <!-- Non-Uniform Staff-Line Guided Unroll (Dewarp) Card -->
@@ -1035,9 +1173,10 @@
       </div>
 
       <!-- 4. Output Paper Size & Scaling Mode -->
-      <div class="control-section">
-        <div class="section-title">
+      <div class="control-section" id="secPaperMargins">
+        <div class="section-title" onclick="toggleControlSection(this.parentElement)">
           <span>4. Target Paper Size & Margins</span>
+          <span class="sec-chevron">▾</span>
         </div>
 
         <div class="control-row">
@@ -1105,9 +1244,10 @@
       </div>
 
       <!-- 5. Export Settings -->
-      <div class="control-section" style="border-bottom:none;">
-        <div class="section-title">
+      <div class="control-section" id="secExport" style="border-bottom:none;">
+        <div class="section-title" onclick="toggleControlSection(this.parentElement)">
           <span>5. Save As / Export Settings</span>
+          <span class="sec-chevron">▾</span>
         </div>
 
         <div class="control-row">
@@ -1267,45 +1407,105 @@
     }, { passive: false });
 
     window.addEventListener('resize', () => {
+      syncMobileDeviceClass();
       if (pdfDoc) renderActiveView();
     });
 
     if (window.visualViewport) {
       window.visualViewport.addEventListener('resize', () => {
+        syncMobileDeviceClass();
         if (pdfDoc) renderActiveView();
       });
     }
 
     window.addEventListener('orientationchange', () => {
       setTimeout(() => {
+        syncMobileDeviceClass();
         if (pdfDoc) renderActiveView();
       }, 120);
     });
 
     // ============================================================================
-    // Mobile Browser Detection & Streamlined Mode (Portrait & Landscape)
+    // Mobile Browser Detection, Collapsible Accordion UI & Streamlined Mode
     // ============================================================================
     let isMobileUiMode = false;
+    let isAccordionMultiOpen = false;
 
     function detectIsMobileBrowser() {
       const ua = navigator.userAgent || '';
       const isMobileUA = /iPhone|iPad|iPod|Android|Mobile|WebOS|BlackBerry/i.test(ua);
       const isIPadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const isCoarseSmall = window.matchMedia && window.matchMedia('(pointer: coarse) and (max-width: 1024px)').matches;
-      return isMobileUA || isIPadOS || isCoarseSmall;
+      return isMobileUA || isIPadOS || isCoarseSmall || (window.innerWidth <= 960);
+    }
+
+    function syncMobileDeviceClass() {
+      const isMob = detectIsMobileBrowser();
+      document.body.classList.toggle('is-mobile-device', isMob);
+    }
+
+    function updateToggleAllButtonText() {
+      const btn = document.getElementById('btnToggleAllSections');
+      if (!btn) return;
+      const sections = Array.from(document.querySelectorAll('.sidebar-right .control-section'));
+      const anyExpanded = sections.some(s => !s.classList.contains('collapsed'));
+      btn.textContent = anyExpanded ? 'Collapse All' : 'Expand All';
+    }
+
+    function toggleControlSection(secEl) {
+      if (!secEl) return;
+      const willExpand = secEl.classList.contains('collapsed');
+      // On mobile devices (unless Expand All was explicitly clicked), act as a clean 1-section-at-a-time Accordion
+      if (willExpand && document.body.classList.contains('is-mobile-device') && !isAccordionMultiOpen) {
+        document.querySelectorAll('.sidebar-right .control-section').forEach(s => {
+          if (s !== secEl) s.classList.add('collapsed');
+        });
+      }
+      secEl.classList.toggle('collapsed', !willExpand);
+      updateToggleAllButtonText();
+      if (willExpand) {
+        setTimeout(() => {
+          secEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }, 60);
+      }
+      if (pdfDoc) renderActiveView();
+    }
+
+    function toggleAllInspectorSections() {
+      const sections = Array.from(document.querySelectorAll('.sidebar-right .control-section'));
+      const anyExpanded = sections.some(s => !s.classList.contains('collapsed'));
+      if (anyExpanded) {
+        isAccordionMultiOpen = false;
+        sections.forEach(s => s.classList.add('collapsed'));
+      } else {
+        isAccordionMultiOpen = true;
+        sections.forEach(s => s.classList.remove('collapsed'));
+      }
+      updateToggleAllButtonText();
+      if (pdfDoc) renderActiveView();
     }
 
     function setMobileUiMode(enable) {
       isMobileUiMode = !!enable;
+      syncMobileDeviceClass();
       document.body.classList.toggle('mobile-mode', isMobileUiMode);
       const btn = document.getElementById('btnToggleMobileUi');
       if (btn) {
-        btn.textContent = isMobileUiMode ? '🖥️ Full UI' : '📱 Simple UI';
+        btn.textContent = isMobileUiMode ? '🎛️ Full UI' : '📱 Simple UI';
       }
       if (isMobileUiMode) {
         setViewMode('split');
+      } else if (document.body.classList.contains('is-mobile-device')) {
+        // When entering Full UI on a mobile screen, collapse all sections by default so all 5 section headers are visible cleanly
+        isAccordionMultiOpen = false;
+        document.querySelectorAll('.sidebar-right .control-section').forEach(s => {
+          s.classList.add('collapsed');
+        });
+        updateToggleAllButtonText();
       }
-      if (pdfDoc) renderActiveView();
+      if (pdfDoc) {
+        setTimeout(() => renderActiveView(), 40);
+      }
     }
 
     function toggleMobileUiMode() {
@@ -1313,6 +1513,7 @@
     }
 
     // Initialize Mobile Mode automatically if running on iPhone / Mobile browser
+    syncMobileDeviceClass();
     if (detectIsMobileBrowser()) {
       setMobileUiMode(true);
     }
@@ -2802,11 +3003,12 @@
 
     function setViewMode(mode) {
       viewMode = mode;
-      document.querySelectorAll('.view-tab').forEach(btn => {
+      document.querySelectorAll('.view-tab, .mobile-view-pill').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.view === mode);
       });
 
       const editorStage = document.getElementById('editorStageContainer');
+      const editorPane = document.getElementById('editorPane');
       const previewPane = document.getElementById('previewPane');
       const gridContainer = document.getElementById('gridViewContainer');
 
@@ -2816,7 +3018,8 @@
       } else {
         editorStage.style.display = 'flex';
         gridContainer.style.display = 'none';
-        previewPane.style.display = (mode === 'split') ? 'flex' : 'none';
+        editorPane.style.display = (mode === 'split' || mode === 'editor') ? 'flex' : 'none';
+        previewPane.style.display = (mode === 'split' || mode === 'preview') ? 'flex' : 'none';
       }
 
       if (pdfDoc) renderActiveView();
@@ -2827,8 +3030,10 @@
       if (viewMode === 'grid') {
         renderAllPagesGrid();
       } else {
-        renderEditorCanvas();
-        if (viewMode === 'split') {
+        if (viewMode === 'split' || viewMode === 'editor') {
+          renderEditorCanvas();
+        }
+        if (viewMode === 'split' || viewMode === 'preview') {
           renderPreviewCanvas();
         }
       }
@@ -2836,8 +3041,9 @@
 
     function renderEditorCanvas() {
       const pane = document.getElementById('editorPane');
-      const padX = isMobileUiMode ? 12 : 36;
-      const padY = isMobileUiMode ? 24 : 46;
+      const isMob = isMobileUiMode || document.body.classList.contains('is-mobile-device');
+      const padX = isMob ? 12 : 36;
+      const padY = isMob ? 24 : 46;
       const availW = Math.max(120, pane.clientWidth - padX);
       const availH = Math.max(120, pane.clientHeight - padY);
 
@@ -3234,8 +3440,9 @@
 
     function renderPreviewCanvas() {
       const pane = document.getElementById('previewPane');
-      const padX = isMobileUiMode ? 12 : 36;
-      const padY = isMobileUiMode ? 24 : 46;
+      const isMob = isMobileUiMode || document.body.classList.contains('is-mobile-device');
+      const padX = isMob ? 12 : 36;
+      const padY = isMob ? 24 : 46;
       const availW = Math.max(120, pane.clientWidth - padX);
       const availH = Math.max(120, pane.clientHeight - padY);
 

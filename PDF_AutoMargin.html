@@ -1145,9 +1145,10 @@
     <div class="progress-card">
       <div id="progressTitle" style="font-weight:700; font-size:1rem;">Processing...</div>
       <div id="progressSubtitle" style="font-size:0.82rem; color:var(--text-muted);">Please wait</div>
-      <div class="progress-bar-wrap">
+      <div class="progress-bar-wrap" id="progressBarWrap">
         <div class="progress-bar-fill" id="progressBarFill"></div>
       </div>
+      <div id="progressActionRow" style="display:none; gap:8px; justify-content:center; margin-top:6px; flex-wrap:wrap;"></div>
     </div>
   </div>
 
@@ -4162,36 +4163,64 @@
     async function previewAdjustedPdfInNewTab() {
       if (!pdfDoc || pagesData.length === 0) return;
 
-      // Open blank tab synchronously on user click so iOS Safari / desktop popup blockers never block it
-      const previewWin = window.open('', '_blank');
-      if (previewWin && previewWin.document) {
-        previewWin.document.write(
-          '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
-          '<title>Generating PDF Preview...</title>' +
-          '<style>body{margin:0;height:100vh;display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;background:#0f172a;color:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,sans-serif;}</style>' +
-          '</head><body><div style="font-size:2.2rem;">🎼</div><div style="font-weight:700;">Generating Adjusted PDF Preview...</div><div style="font-size:0.85rem;color:#94a3b8;">Please wait a moment</div></body></html>'
-        );
-        previewWin.document.close();
-      }
-
       try {
+        // Complete all PDF rendering in the current active tab first so mobile browsers (iOS Safari)
+        // never background-freeze or throttle the generation loop!
         const pdfUint8 = await buildAdjustedPdfBytes();
         const sizeKb = Math.round(pdfUint8.byteLength / 1024);
         const pdfBlob = new Blob([pdfUint8], { type: 'application/pdf' });
         const blobUrl = URL.createObjectURL(pdfBlob);
 
-        hideProgress();
-        if (previewWin && !previewWin.closed) {
-          previewWin.location.replace(blobUrl);
+        // Attempt to open the finished PDF in a new tab immediately
+        const newWin = window.open(blobUrl, '_blank');
+        if (newWin) {
+          hideProgress();
+          showToast(`👁️ Opened adjusted PDF (${sizeKb} KB) in a new browser tab!`);
         } else {
-          window.open(blobUrl, '_blank');
+          // If mobile Safari blocked async window.open after await, show a direct 1-tap <a target="_blank"> button
+          showReadyPdfModal(blobUrl, sizeKb);
         }
-        showToast(`👁️ Opened adjusted PDF (${sizeKb} KB) in a new browser tab!`);
       } catch (err) {
-        if (previewWin && !previewWin.closed) previewWin.close();
         console.error(err);
         hideProgress();
         alert('Error generating PDF preview: ' + err.message);
+      }
+    }
+
+    function showReadyPdfModal(blobUrl, sizeKb) {
+      const overlay = document.getElementById('progressOverlay');
+      overlay.style.display = 'flex';
+      document.getElementById('progressTitle').textContent = `✅ PDF Ready (${sizeKb} KB)`;
+      document.getElementById('progressSubtitle').textContent = 'Tap below to open the finished PDF in a new tab:';
+      const barWrap = document.getElementById('progressBarWrap');
+      if (barWrap) barWrap.style.display = 'none';
+
+      const actionRow = document.getElementById('progressActionRow');
+      if (actionRow) {
+        actionRow.innerHTML = '';
+        actionRow.style.display = 'flex';
+
+        const openLink = document.createElement('a');
+        openLink.href = blobUrl;
+        openLink.target = '_blank';
+        openLink.rel = 'noopener';
+        openLink.className = 'btn btn-success';
+        openLink.style.textDecoration = 'none';
+        openLink.style.padding = '9px 16px';
+        openLink.style.fontSize = '0.88rem';
+        openLink.textContent = '👁️ Open PDF in New Tab';
+        openLink.onclick = () => {
+          setTimeout(() => hideProgress(), 150);
+        };
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'btn';
+        closeBtn.style.padding = '9px 14px';
+        closeBtn.textContent = 'Close';
+        closeBtn.onclick = () => hideProgress();
+
+        actionRow.appendChild(openLink);
+        actionRow.appendChild(closeBtn);
       }
     }
 
@@ -4271,10 +4300,22 @@
       overlay.style.display = 'flex';
       document.getElementById('progressTitle').textContent = title;
       document.getElementById('progressSubtitle').textContent = subtitle;
+      const barWrap = document.getElementById('progressBarWrap');
+      if (barWrap) barWrap.style.display = 'block';
+      const actionRow = document.getElementById('progressActionRow');
+      if (actionRow) {
+        actionRow.style.display = 'none';
+        actionRow.innerHTML = '';
+      }
       document.getElementById('progressBarFill').style.width = `${pct}%`;
     }
 
     function hideProgress() {
+      const actionRow = document.getElementById('progressActionRow');
+      if (actionRow) {
+        actionRow.style.display = 'none';
+        actionRow.innerHTML = '';
+      }
       document.getElementById('progressOverlay').style.display = 'none';
     }
 

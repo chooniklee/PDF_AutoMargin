@@ -978,11 +978,11 @@
           <button class="btn btn-sm" id="btnNextPage" onclick="changePage(1)" disabled>Next ▶</button>
         </div>
         <div class="stage-hint">
-          <span>💡 <b>Drag Blue Handles/Edges</b>: Resize margins</span>
+          <span>💡 <b>Drag 4 Corners ●</b>: Free perspective unwrap</span>
           <span>•</span>
-          <span><b>Drag Inside Box</b>: Move fixed-size crop window</span>
+          <span><b>Drag 4 Midpoints ■ / Edges</b>: Move whole side</span>
           <span>•</span>
-          <span><span class="kbd">Wheel</span> / <span class="kbd">←</span><span class="kbd">→</span> Navigate pages</span>
+          <span><b>Drag Inside</b>: Move box</span>
         </div>
       </div>
 
@@ -1095,6 +1095,9 @@
           <button class="btn btn-sm" onclick="applyCropToScope('all')">Copy to All Pages</button>
           <button class="btn btn-sm" onclick="applyCropToScope('parity')">Copy to Odd/Even</button>
         </div>
+        <button class="btn btn-sm" style="margin-top:4px; width:100%;" onclick="resetQuadToRectCurrentPage()" title="Snap all 4 corners back to a straight rectangle">
+          ⬜ Reset 4 Corners to Rectangle
+        </button>
       </div>
 
       <!-- 3. Deskew, Staff Unroll & Image Enhancement -->
@@ -1334,7 +1337,63 @@
     let dragMode = null; // 'n','s','e','w','nw','ne','sw','se','move'
     let dragStartMouse = { x: 0, y: 0 };
     let dragStartCrop = null;
+    let dragStartQuad = null;
     let isInteracting = false;
+
+    // 4-Corner Perspective Quad Helpers (nw, ne, se, sw in normalized [0..1]x[0..1] coordinates)
+    function createRectQuad(crop) {
+      return {
+        nw: { x: round4(crop.left),      y: round4(crop.top) },
+        ne: { x: round4(1 - crop.right), y: round4(crop.top) },
+        se: { x: round4(1 - crop.right), y: round4(1 - crop.bottom) },
+        sw: { x: round4(crop.left),      y: round4(1 - crop.bottom) }
+      };
+    }
+
+    function cloneQuad(q) {
+      return {
+        nw: { x: q.nw.x, y: q.nw.y },
+        ne: { x: q.ne.x, y: q.ne.y },
+        se: { x: q.se.x, y: q.se.y },
+        sw: { x: q.sw.x, y: q.sw.y }
+      };
+    }
+
+    function ensurePageQuad(p) {
+      if (!p.quad) {
+        p.quad = createRectQuad(p.crop);
+      }
+      return p.quad;
+    }
+
+    function syncQuadFromCrop(p) {
+      p.quad = createRectQuad(p.crop);
+    }
+
+    function syncCropFromQuad(p) {
+      const q = ensurePageQuad(p);
+      const avgTop = clamp((q.nw.y + q.ne.y) / 2, 0, 0.9);
+      const avgBottom = clamp(1 - (q.sw.y + q.se.y) / 2, 0, 0.9);
+      const avgLeft = clamp((q.nw.x + q.sw.x) / 2, 0, 0.9);
+      const avgRight = clamp(1 - (q.ne.x + q.se.x) / 2, 0, 0.9);
+      p.crop = {
+        top: round4(avgTop),
+        bottom: round4(avgBottom),
+        left: round4(avgLeft),
+        right: round4(avgRight)
+      };
+    }
+
+    function hasPerspectiveQuad(p) {
+      if (!p || !p.quad) return false;
+      const q = p.quad;
+      return (
+        Math.abs(q.nw.y - q.ne.y) > 0.0005 ||
+        Math.abs(q.sw.y - q.se.y) > 0.0005 ||
+        Math.abs(q.nw.x - q.sw.x) > 0.0005 ||
+        Math.abs(q.ne.x - q.se.x) > 0.0005
+      );
+    }
 
     // Cache for transformed (deskewed + filtered) working canvas of the active page
     let cachedTransformed = { pageIdx: -1, key: '', canvas: null };
@@ -1567,6 +1626,7 @@
             scoreRight: 0.92,
             rawBounds: null,
             crop: { top: 0.05, bottom: 0.05, left: 0.06, right: 0.06 },
+            quad: createRectQuad({ top: 0.05, bottom: 0.05, left: 0.06, right: 0.06 }),
             skewDeg: 0,
             dewarp: {
               enabled: false,
@@ -2690,6 +2750,7 @@
           left: round4(leftEdgeNorm),
           right: round4(1 - rightEdgeNorm)
         };
+        syncQuadFromCrop(p);
         p.scoreRight = round4(clamp(sr, p.crop.left + 0.02, 1 - p.crop.right));
       }
     }
@@ -2824,6 +2885,7 @@
           top: round4(newTop),
           bottom: round4(1 - newTop - targetH)
         };
+        syncQuadFromCrop(p);
         if (typeof p.scoreRight === 'number') {
           const maxSr = round4(1 - p.crop.right);
           const minSr = round4(p.crop.left + 0.02);
@@ -3080,37 +3142,54 @@
       editorCtx.imageSmoothingQuality = 'high';
       editorCtx.drawImage(transCanvas, 0, 0, W, H);
 
-      // 2. Darken outside crop box
+      // 2. Darken outside 4-corner crop quad (supports arbitrary perspective quad via evenodd fill rule)
+      const q = ensurePageQuad(p);
+      const nwPx = { x: q.nw.x * W, y: q.nw.y * H };
+      const nePx = { x: q.ne.x * W, y: q.ne.y * H };
+      const sePx = { x: q.se.x * W, y: q.se.y * H };
+      const swPx = { x: q.sw.x * W, y: q.sw.y * H };
+
       const cx1 = Math.round(p.crop.left * W);
       const cy1 = Math.round(p.crop.top * H);
       const cx2 = Math.round((1 - p.crop.right) * W);
       const cy2 = Math.round((1 - p.crop.bottom) * H);
-      const cw = Math.max(10, cx2 - cx1);
-      const ch = Math.max(10, cy2 - cy1);
 
+      editorCtx.save();
       editorCtx.fillStyle = 'rgba(15, 23, 42, 0.58)';
-      editorCtx.fillRect(0, 0, W, cy1);
-      editorCtx.fillRect(0, cy2, W, H - cy2);
-      editorCtx.fillRect(0, cy1, cx1, ch);
-      editorCtx.fillRect(cx2, cy1, W - cx2, ch);
+      editorCtx.beginPath();
+      editorCtx.rect(0, 0, W, H);
+      editorCtx.moveTo(nwPx.x, nwPx.y);
+      editorCtx.lineTo(nePx.x, nePx.y);
+      editorCtx.lineTo(sePx.x, sePx.y);
+      editorCtx.lineTo(swPx.x, swPx.y);
+      editorCtx.closePath();
+      editorCtx.fill('evenodd');
+      editorCtx.restore();
 
-      // 3. Draw alignment horizontal reference grid inside crop box
+      // 3. Draw perspective-interpolated alignment reference grid inside the 4-corner quad
       editorCtx.save();
       editorCtx.strokeStyle = isInteracting ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.22)';
       editorCtx.lineWidth = 1;
       editorCtx.setLineDash([4, 4]);
       const steps = 8;
       for (let i = 1; i < steps; i++) {
-        const gy = Math.round(cy1 + (ch * i) / steps);
+        const t = i / steps;
+        const lx = nwPx.x + (swPx.x - nwPx.x) * t;
+        const ly = nwPx.y + (swPx.y - nwPx.y) * t;
+        const rx = nePx.x + (sePx.x - nePx.x) * t;
+        const ry = nePx.y + (sePx.y - nePx.y) * t;
         editorCtx.beginPath();
-        editorCtx.moveTo(cx1, gy);
-        editorCtx.lineTo(cx2, gy);
+        editorCtx.moveTo(lx, ly);
+        editorCtx.lineTo(rx, ry);
         editorCtx.stroke();
       }
-      const gxMid = Math.round(cx1 + cw / 2);
+      const topMidX = (nwPx.x + nePx.x) / 2;
+      const topMidY = (nwPx.y + nePx.y) / 2;
+      const botMidX = (swPx.x + sePx.x) / 2;
+      const botMidY = (swPx.y + sePx.y) / 2;
       editorCtx.beginPath();
-      editorCtx.moveTo(gxMid, cy1);
-      editorCtx.lineTo(gxMid, cy2);
+      editorCtx.moveTo(topMidX, topMidY);
+      editorCtx.lineTo(botMidX, botMidY);
       editorCtx.stroke();
 
       // 3b. Draw Detected Staff Curves & Straightened Horizontal Ruler Overlay if enabled
@@ -3183,43 +3262,62 @@
       }
       editorCtx.restore();
 
-      // 4. Draw Crop Border
-      editorCtx.strokeStyle = '#3b82f6';
+      // 4. Draw 4-Corner Crop Quad Border
+      const isPersp = hasPerspectiveQuad(p);
+      editorCtx.strokeStyle = isPersp ? '#38bdf8' : '#3b82f6';
       editorCtx.lineWidth = isMob ? 2.4 : 2;
-      editorCtx.strokeRect(cx1, cy1, cw, ch);
+      editorCtx.beginPath();
+      editorCtx.moveTo(nwPx.x, nwPx.y);
+      editorCtx.lineTo(nePx.x, nePx.y);
+      editorCtx.lineTo(sePx.x, sePx.y);
+      editorCtx.lineTo(swPx.x, swPx.y);
+      editorCtx.closePath();
+      editorCtx.stroke();
 
-      // 5. Draw 8 Resize Handles (Larger on mobile & clamped inside canvas bounds so edge handles are never clipped)
-      const handles = getHandlePositions(cx1, cy1, cx2, cy2);
+      // 5. Draw 8 Resize Handles:
+      //    - 4 Corner Handles (nw, ne, se, sw): Circular vertices that move independently for perspective unwrap
+      //    - 4 Side Midpoint Handles (n, e, s, w): Square handles that move the entire side together
+      const handles = getHandlePositions(q, W, H);
       const hHalf = isMob ? 7 : 5;
+      const cornerRadius = isMob ? 8 : 6;
       editorCtx.fillStyle = '#ffffff';
       editorCtx.strokeStyle = '#2563eb';
       editorCtx.lineWidth = isMob ? 2.4 : 2;
-      for (const hPos of Object.values(handles)) {
-        const hx = clamp(hPos.x, hHalf + 1, W - hHalf - 1);
-        const hy = clamp(hPos.y, hHalf + 1, H - hHalf - 1);
+      for (const [hName, hPos] of Object.entries(handles)) {
+        const isCorner = (hName.length === 2);
+        const pad = isCorner ? cornerRadius : hHalf;
+        const hx = clamp(hPos.x, pad + 1, W - pad - 1);
+        const hy = clamp(hPos.y, pad + 1, H - pad - 1);
         editorCtx.beginPath();
-        editorCtx.rect(hx - hHalf, hy - hHalf, hHalf * 2, hHalf * 2);
+        if (isCorner) {
+          editorCtx.arc(hx, hy, cornerRadius, 0, Math.PI * 2);
+        } else {
+          editorCtx.rect(hx - hHalf, hy - hHalf, hHalf * 2, hHalf * 2);
+        }
         editorCtx.fill();
         editorCtx.stroke();
       }
 
       const wPct = ((1 - p.crop.left - p.crop.right) * 100).toFixed(1);
       const hPct = ((1 - p.crop.top - p.crop.bottom) * 100).toFixed(1);
-      document.getElementById('cropSizeReadout').textContent = `Crop Area: ${wPct}% W × ${hPct}% H`;
+      document.getElementById('cropSizeReadout').textContent =
+        isPersp ? `Crop: ${wPct}% W × ${hPct}% H · Perspective Unwarp` : `Crop Area: ${wPct}% W × ${hPct}% H`;
     }
 
-    function getHandlePositions(x1, y1, x2, y2) {
-      const mx = (x1 + x2) / 2;
-      const my = (y1 + y2) / 2;
+    function getHandlePositions(q, W, H) {
+      const nw = { x: q.nw.x * W, y: q.nw.y * H };
+      const ne = { x: q.ne.x * W, y: q.ne.y * H };
+      const se = { x: q.se.x * W, y: q.se.y * H };
+      const sw = { x: q.sw.x * W, y: q.sw.y * H };
       return {
-        nw: { x: x1, y: y1 },
-        n:  { x: mx, y: y1 },
-        ne: { x: x2, y: y1 },
-        e:  { x: x2, y: my },
-        se: { x: x2, y: y2 },
-        s:  { x: mx, y: y2 },
-        sw: { x: x1, y: y2 },
-        w:  { x: x1, y: my }
+        nw,
+        n:  { x: (nw.x + ne.x) / 2, y: (nw.y + ne.y) / 2 },
+        ne,
+        e:  { x: (ne.x + se.x) / 2, y: (ne.y + se.y) / 2 },
+        se,
+        s:  { x: (sw.x + se.x) / 2, y: (sw.y + se.y) / 2 },
+        sw,
+        w:  { x: (nw.x + sw.x) / 2, y: (nw.y + sw.y) / 2 }
       };
     }
 
@@ -3361,6 +3459,101 @@
       };
     }
 
+    // Closed-form 3x3 Projective Homography Unwarp (Paul Heckbert unit-square-to-quad mapping)
+    // Unwraps the arbitrary 4-corner quadrilateral (nw, ne, se, sw) from sourceCanvas into a rectangular canvas (outW x outH)
+    function createPerspectiveUnwarpedCropCanvas(sourceCanvas, quad, reqW, reqH, fastPreview = false) {
+      const srcW = sourceCanvas.width;
+      const srcH = sourceCanvas.height;
+      const maxDim = fastPreview ? 720 : 4800;
+      const scaleDown = Math.min(1, maxDim / Math.max(1, reqW, reqH));
+      const outW = Math.max(4, Math.round(reqW * scaleDown));
+      const outH = Math.max(4, Math.round(reqH * scaleDown));
+
+      const x0 = quad.nw.x * srcW, y0 = quad.nw.y * srcH;
+      const x1 = quad.ne.x * srcW, y1 = quad.ne.y * srcH;
+      const x2 = quad.se.x * srcW, y2 = quad.se.y * srcH;
+      const x3 = quad.sw.x * srcW, y3 = quad.sw.y * srcH;
+
+      const dx1 = x1 - x2, dx2 = x3 - x2, sx = x0 - x1 + x2 - x3;
+      const dy1 = y1 - y2, dy2 = y3 - y2, sy = y0 - y1 + y2 - y3;
+      const det = dx1 * dy2 - dx2 * dy1;
+
+      let g = 0, h = 0;
+      if (Math.abs(det) > 1e-8) {
+        g = (sx * dy2 - dx2 * sy) / det;
+        h = (dx1 * sy - sx * dy1) / det;
+      }
+      const a = x1 - x0 + g * x1;
+      const b = x3 - x0 + h * x3;
+      const c = x0;
+      const d = y1 - y0 + g * y1;
+      const e = y3 - y0 + h * y3;
+      const f = y0;
+
+      const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      const srcData = srcCtx.getImageData(0, 0, srcW, srcH).data;
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = outW;
+      outCanvas.height = outH;
+      const outCtx = outCanvas.getContext('2d');
+      const outImg = outCtx.createImageData(outW, outH);
+      const dstData = outImg.data;
+
+      const invW = outW > 1 ? 1 / (outW - 1) : 0;
+      const invH = outH > 1 ? 1 / (outH - 1) : 0;
+      const maxX = srcW - 1;
+      const maxY = srcH - 1;
+
+      let dstIdx = 0;
+      for (let py = 0; py < outH; py++) {
+        const v = py * invH;
+        const bv_c = b * v + c;
+        const ev_f = e * v + f;
+        const hv_1 = h * v + 1;
+
+        for (let px = 0; px < outW; px++) {
+          const u = px * invW;
+          const w = g * u + hv_1;
+          const srcX = (a * u + bv_c) / w;
+          const srcY = (d * u + ev_f) / w;
+
+          if (srcX < 0 || srcX > maxX || srcY < 0 || srcY > maxY) {
+            dstData[dstIdx] = 255;
+            dstData[dstIdx + 1] = 255;
+            dstData[dstIdx + 2] = 255;
+            dstData[dstIdx + 3] = 255;
+          } else {
+            const ix = srcX | 0;
+            const iy = srcY | 0;
+            const fx = srcX - ix;
+            const fy = srcY - iy;
+            const ix1 = ix < maxX ? ix + 1 : maxX;
+            const iy1 = iy < maxY ? iy + 1 : maxY;
+
+            const idx00 = (iy * srcW + ix) << 2;
+            const idx10 = (iy * srcW + ix1) << 2;
+            const idx01 = (iy1 * srcW + ix) << 2;
+            const idx11 = (iy1 * srcW + ix1) << 2;
+
+            const w00 = (1 - fx) * (1 - fy);
+            const w10 = fx * (1 - fy);
+            const w01 = (1 - fx) * fy;
+            const w11 = fx * fy;
+
+            dstData[dstIdx]     = (srcData[idx00] * w00 + srcData[idx10] * w10 + srcData[idx01] * w01 + srcData[idx11] * w11 + 0.5) | 0;
+            dstData[dstIdx + 1] = (srcData[idx00 + 1] * w00 + srcData[idx10 + 1] * w10 + srcData[idx01 + 1] * w01 + srcData[idx11 + 1] * w11 + 0.5) | 0;
+            dstData[dstIdx + 2] = (srcData[idx00 + 2] * w00 + srcData[idx10 + 2] * w10 + srcData[idx01 + 2] * w01 + srcData[idx11 + 2] * w11 + 0.5) | 0;
+            dstData[dstIdx + 3] = 255;
+          }
+          dstIdx += 4;
+        }
+      }
+
+      outCtx.putImageData(outImg, 0, 0);
+      return outCanvas;
+    }
+
     function drawTargetPageToCanvas(pageIdx, targetCanvas, sourceCanvas, showGuides = true) {
       const spec = getOutputLayoutSpec();
       const { paper, mTop, addPageNum, startPageNum } = spec;
@@ -3377,21 +3570,38 @@
       const place = computePageTargetPlacement(pageIdx, spec);
       const { isOdd, effLeftMm, effRightMm, availWMm, availHMm, drawWMm, drawHMm, destXMm, destYMm, targetScoreRightXMm } = place;
 
-      const sx = p.crop.left * sourceCanvas.width;
-      const sy = p.crop.top * sourceCanvas.height;
-      const sw = (1 - p.crop.left - p.crop.right) * sourceCanvas.width;
-      const sh = (1 - p.crop.top - p.crop.bottom) * sourceCanvas.height;
+      const destPxX = destXMm * pxPerMm;
+      const destPxY = destYMm * pxPerMm;
+      const destPxW = drawWMm * pxPerMm;
+      const destPxH = drawHMm * pxPerMm;
 
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(
-        sourceCanvas,
-        sx, sy, sw, sh,
-        destXMm * pxPerMm,
-        destYMm * pxPerMm,
-        drawWMm * pxPerMm,
-        drawHMm * pxPerMm
-      );
+
+      if (hasPerspectiveQuad(p)) {
+        const unwarpedCanvas = createPerspectiveUnwarpedCropCanvas(
+          sourceCanvas,
+          ensurePageQuad(p),
+          destPxW,
+          destPxH,
+          isInteracting && showGuides
+        );
+        ctx.drawImage(unwarpedCanvas, destPxX, destPxY, destPxW, destPxH);
+      } else {
+        const sx = p.crop.left * sourceCanvas.width;
+        const sy = p.crop.top * sourceCanvas.height;
+        const sw = (1 - p.crop.left - p.crop.right) * sourceCanvas.width;
+        const sh = (1 - p.crop.top - p.crop.bottom) * sourceCanvas.height;
+
+        ctx.drawImage(
+          sourceCanvas,
+          sx, sy, sw, sh,
+          destPxX,
+          destPxY,
+          destPxW,
+          destPxH
+        );
+      }
 
       if (addPageNum) {
         const pageNumStr = String(startPageNum + pageIdx);
@@ -3520,14 +3730,16 @@
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(p.workCanvas, 0, 0, W, H);
 
-      const x1 = p.crop.left * W;
-      const y1 = p.crop.top * H;
-      const cw = (1 - p.crop.left - p.crop.right) * W;
-      const ch = (1 - p.crop.top - p.crop.bottom) * H;
-
-      ctx.strokeStyle = '#3b82f6';
+      const q = ensurePageQuad(p);
+      ctx.strokeStyle = hasPerspectiveQuad(p) ? '#38bdf8' : '#3b82f6';
       ctx.lineWidth = Math.max(2, Math.round(W / 70));
-      ctx.strokeRect(x1, y1, cw, ch);
+      ctx.beginPath();
+      ctx.moveTo(q.nw.x * W, q.nw.y * H);
+      ctx.lineTo(q.ne.x * W, q.ne.y * H);
+      ctx.lineTo(q.se.x * W, q.se.y * H);
+      ctx.lineTo(q.sw.x * W, q.sw.y * H);
+      ctx.closePath();
+      ctx.stroke();
     }
 
     // ============================================================================
@@ -3547,19 +3759,29 @@
       };
     }
 
+    function distToSegment(px, py, x1, y1, x2, y2) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy;
+      if (lenSq < 1e-6) return Math.hypot(px - x1, py - y1);
+      const t = clamp(((px - x1) * dx + (py - y1) * dy) / lenSq, 0, 1);
+      return Math.hypot(px - (x1 + t * dx), py - (y1 + t * dy));
+    }
+
     function hitTestHandle(mx, my, isTouch = false) {
       const p = pagesData[currentPageIdx];
       const W = editorCanvas._cssWidth || editorCanvas.width;
       const H = editorCanvas._cssHeight || editorCanvas.height;
+      const q = ensurePageQuad(p);
       const x1 = p.crop.left * W;
       const y1 = p.crop.top * H;
       const x2 = (1 - p.crop.right) * W;
       const y2 = (1 - p.crop.bottom) * H;
-      const hitDist = isTouch ? 28 : 11;
+      const hitDist = isTouch ? 28 : 12;
       const edgeTol = isTouch ? 20 : 8;
 
       // 1. Highest Priority: Test the 8 blue crop handles FIRST (pick closest handle within hitDist)
-      const handles = getHandlePositions(x1, y1, x2, y2);
+      const handles = getHandlePositions(q, W, H);
       let bestHandle = null;
       let bestDist = Infinity;
       for (const [name, pos] of Object.entries(handles)) {
@@ -3583,13 +3805,13 @@
       }
 
       // 3. Test the 4 blue crop border edges (n, s, w, e) BEFORE the orange line shaft
-      // so dragging the right crop border (e) never accidentally grabs the orange anchor line!
-      if (mx >= x1 - edgeTol && mx <= x2 + edgeTol && Math.abs(my - y1) <= edgeTol) return 'n';
-      if (mx >= x1 - edgeTol && mx <= x2 + edgeTol && Math.abs(my - y2) <= edgeTol) return 's';
-      if (my >= y1 - edgeTol && my <= y2 + edgeTol && Math.abs(mx - x1) <= edgeTol) return 'w';
-      if (my >= y1 - edgeTol && my <= y2 + edgeTol && Math.abs(mx - x2) <= edgeTol) return 'e';
+      // so dragging a side edge moves that whole side together!
+      if (distToSegment(mx, my, handles.nw.x, handles.nw.y, handles.ne.x, handles.ne.y) <= edgeTol) return 'n';
+      if (distToSegment(mx, my, handles.sw.x, handles.sw.y, handles.se.x, handles.se.y) <= edgeTol) return 's';
+      if (distToSegment(mx, my, handles.nw.x, handles.nw.y, handles.sw.x, handles.sw.y) <= edgeTol) return 'w';
+      if (distToSegment(mx, my, handles.ne.x, handles.ne.y, handles.se.x, handles.se.y) <= edgeTol) return 'e';
 
-      // 4. Test the vertical orange anchor shaft only when clearly separated from the right crop edge x2
+      // 4. Test the vertical orange anchor shaft only when clearly separated from the right crop edge
       if (typeof p.scoreRight === 'number') {
         const clampedSr = clamp(p.scoreRight, p.crop.left + 0.01, 1 - p.crop.right);
         const scoreRx = clampedSr * W;
@@ -3607,8 +3829,8 @@
     }
 
     const CURSOR_MAP = {
-      nw: 'nwse-resize', se: 'nwse-resize',
-      ne: 'nesw-resize', sw: 'nesw-resize',
+      nw: 'crosshair', se: 'crosshair',
+      ne: 'crosshair', sw: 'crosshair',
       n: 'ns-resize', s: 'ns-resize',
       e: 'ew-resize', w: 'ew-resize',
       move: 'move',
@@ -3648,39 +3870,75 @@
       const dx = (pos.x - dragStartMouse.x) / W;
       const dy = (pos.y - dragStartMouse.y) / H;
 
-      const c = { ...dragStartCrop };
-      const minSize = 0.15;
+      const sq = dragStartQuad || createRectQuad(dragStartCrop);
+      const q = cloneQuad(sq);
+      const minSpan = 0.08;
 
       if (dragMode === 'move') {
-        const boxW = 1 - c.left - c.right;
-        const boxH = 1 - c.top - c.bottom;
-        const newLeft = Math.max(0, Math.min(1 - boxW, c.left + dx));
-        const newTop = Math.max(0, Math.min(1 - boxH, c.top + dy));
-        c.left = round4(newLeft);
-        c.right = round4(1 - newLeft - boxW);
-        c.top = round4(newTop);
-        c.bottom = round4(1 - newTop - boxH);
-      } else {
-        if (dragMode.includes('n')) {
-          c.top = round4(Math.max(0, Math.min(1 - c.bottom - minSize, c.top + dy)));
+        // Translate all 4 corners together
+        const minX = Math.min(sq.nw.x, sq.ne.x, sq.se.x, sq.sw.x);
+        const maxX = Math.max(sq.nw.x, sq.ne.x, sq.se.x, sq.sw.x);
+        const minY = Math.min(sq.nw.y, sq.ne.y, sq.se.y, sq.sw.y);
+        const maxY = Math.max(sq.nw.y, sq.ne.y, sq.se.y, sq.sw.y);
+        const cdx = clamp(dx, -minX, 1 - maxX);
+        const cdy = clamp(dy, -minY, 1 - maxY);
+        for (const k of ['nw', 'ne', 'se', 'sw']) {
+          q[k].x = round4(sq[k].x + cdx);
+          q[k].y = round4(sq[k].y + cdy);
         }
-        if (dragMode.includes('s')) {
-          c.bottom = round4(Math.max(0, Math.min(1 - c.top - minSize, c.bottom - dy)));
-        }
-        if (dragMode.includes('w')) {
-          c.left = round4(Math.max(0, Math.min(1 - c.right - minSize, c.left + dx)));
-        }
-        if (dragMode.includes('e')) {
-          c.right = round4(Math.max(0, Math.min(1 - c.left - minSize, c.right - dx)));
-        }
+      } else if (dragMode === 'nw') {
+        // Move ONLY the North-West corner independently (for perspective unwrap)
+        q.nw.x = round4(clamp(sq.nw.x + dx, 0, Math.min(sq.ne.x, sq.se.x) - minSpan));
+        q.nw.y = round4(clamp(sq.nw.y + dy, 0, Math.min(sq.sw.y, sq.se.y) - minSpan));
+      } else if (dragMode === 'ne') {
+        // Move ONLY the North-East corner independently (for perspective unwrap)
+        q.ne.x = round4(clamp(sq.ne.x + dx, Math.max(sq.nw.x, sq.sw.x) + minSpan, 1));
+        q.ne.y = round4(clamp(sq.ne.y + dy, 0, Math.min(sq.sw.y, sq.se.y) - minSpan));
+      } else if (dragMode === 'se') {
+        // Move ONLY the South-East corner independently (for perspective unwrap)
+        q.se.x = round4(clamp(sq.se.x + dx, Math.max(sq.nw.x, sq.sw.x) + minSpan, 1));
+        q.se.y = round4(clamp(sq.se.y + dy, Math.max(sq.nw.y, sq.ne.y) + minSpan, 1));
+      } else if (dragMode === 'sw') {
+        // Move ONLY the South-West corner independently (for perspective unwrap)
+        q.sw.x = round4(clamp(sq.sw.x + dx, 0, Math.min(sq.ne.x, sq.se.x) - minSpan));
+        q.sw.y = round4(clamp(sq.sw.y + dy, Math.max(sq.nw.y, sq.ne.y) + minSpan, 1));
+      } else if (dragMode === 'n') {
+        // Move the ENTIRE Top Side (both nw.y and ne.y together)
+        const minAllowedDy = -Math.min(sq.nw.y, sq.ne.y);
+        const maxAllowedDy = Math.min(sq.sw.y - sq.nw.y, sq.se.y - sq.ne.y) - minSpan;
+        const cdy = clamp(dy, minAllowedDy, maxAllowedDy);
+        q.nw.y = round4(sq.nw.y + cdy);
+        q.ne.y = round4(sq.ne.y + cdy);
+      } else if (dragMode === 's') {
+        // Move the ENTIRE Bottom Side (both sw.y and se.y together)
+        const minAllowedDy = Math.max(sq.nw.y - sq.sw.y, sq.ne.y - sq.se.y) + minSpan;
+        const maxAllowedDy = 1 - Math.max(sq.sw.y, sq.se.y);
+        const cdy = clamp(dy, minAllowedDy, maxAllowedDy);
+        q.sw.y = round4(sq.sw.y + cdy);
+        q.se.y = round4(sq.se.y + cdy);
+      } else if (dragMode === 'w') {
+        // Move the ENTIRE Left Side (both nw.x and sw.x together)
+        const minAllowedDx = -Math.min(sq.nw.x, sq.sw.x);
+        const maxAllowedDx = Math.min(sq.ne.x - sq.nw.x, sq.se.x - sq.sw.x) - minSpan;
+        const cdx = clamp(dx, minAllowedDx, maxAllowedDx);
+        q.nw.x = round4(sq.nw.x + cdx);
+        q.sw.x = round4(sq.sw.x + cdx);
+      } else if (dragMode === 'e') {
+        // Move the ENTIRE Right Side (both ne.x and se.x together)
+        const minAllowedDx = Math.max(sq.nw.x - sq.ne.x, sq.sw.x - sq.se.x) + minSpan;
+        const maxAllowedDx = 1 - Math.max(sq.ne.x, sq.se.x);
+        const cdx = clamp(dx, minAllowedDx, maxAllowedDx);
+        q.ne.x = round4(sq.ne.x + cdx);
+        q.se.x = round4(sq.se.x + cdx);
       }
 
-      pagesData[currentPageIdx].crop = c;
+      p.quad = q;
+      syncCropFromQuad(p);
 
       // Automatically clamp scoreRight so it is ALWAYS strictly confined inside the user's adjusted crop box!
       if (typeof p.scoreRight === 'number') {
-        const maxSr = round4(1 - c.right);
-        const minSr = round4(c.left + 0.02);
+        const maxSr = round4(1 - p.crop.right);
+        const minSr = round4(p.crop.left + 0.02);
         p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
       }
 
@@ -3699,6 +3957,7 @@
         isInteracting = true;
         dragStartMouse = pos;
         dragStartCrop = { ...pagesData[currentPageIdx].crop };
+        dragStartQuad = cloneQuad(ensurePageQuad(pagesData[currentPageIdx]));
       }
     });
 
@@ -3712,6 +3971,7 @@
         isInteracting = true;
         dragStartMouse = pos;
         dragStartCrop = { ...pagesData[currentPageIdx].crop };
+        dragStartQuad = cloneQuad(ensurePageQuad(pagesData[currentPageIdx]));
       }
     }, { passive: false });
 
@@ -3852,7 +4112,10 @@
       const rawPad = parseFloat(document.getElementById('rngAutoPad').value);
       const padPct = (isNaN(rawPad) ? 1.8 : rawPad) / 100;
       const targetRight = Math.min(0.999, p.scoreRight + padPct);
-      p.crop.right = round4(1 - targetRight);
+      const q = ensurePageQuad(p);
+      q.ne.x = round4(targetRight);
+      q.se.x = round4(targetRight);
+      syncCropFromQuad(p);
       syncInspectorFromPage();
       drawThumbnail(currentPageIdx);
       renderActiveView();
@@ -3868,6 +4131,7 @@
       const right = clamp((parseFloat(document.getElementById('numCropRight').value) || 0) / 100, 0, 0.45);
 
       p.crop = { top: round4(top), bottom: round4(bottom), left: round4(left), right: round4(right) };
+      syncQuadFromCrop(p);
       if (typeof p.scoreRight === 'number') {
         const maxSr = round4(1 - p.crop.right);
         const minSr = round4(p.crop.left + 0.02);
@@ -3878,14 +4142,26 @@
       renderActiveView();
     }
 
+    function resetQuadToRectCurrentPage() {
+      if (!pdfDoc) return;
+      const p = pagesData[currentPageIdx];
+      syncQuadFromCrop(p);
+      syncInspectorFromPage();
+      drawThumbnail(currentPageIdx);
+      renderActiveView();
+      showToast(`Page ${currentPageIdx + 1} corners reset to a straight rectangle.`);
+    }
+
     function applyCropToScope(scope) {
       if (!pdfDoc) return;
       const srcCrop = { ...pagesData[currentPageIdx].crop };
+      const srcQuad = cloneQuad(ensurePageQuad(pagesData[currentPageIdx]));
       const isCurOdd = (currentPageIdx % 2 === 0);
 
       for (let i = 0; i < pagesData.length; i++) {
         if (scope === 'all' || (scope === 'parity' && (i % 2 === 0) === isCurOdd)) {
           pagesData[i].crop = { ...srcCrop };
+          pagesData[i].quad = cloneQuad(srcQuad);
           if (typeof pagesData[i].scoreRight === 'number') {
             const maxSr = round4(1 - pagesData[i].crop.right);
             const minSr = round4(pagesData[i].crop.left + 0.02);
@@ -3895,7 +4171,7 @@
         }
       }
       renderActiveView();
-      showToast(scope === 'all' ? 'Copied crop margins to all pages.' : `Copied crop margins to all ${isCurOdd ? 'odd' : 'even'} pages.`);
+      showToast(scope === 'all' ? 'Copied crop & perspective quad to all pages.' : `Copied crop & perspective quad to all ${isCurOdd ? 'odd' : 'even'} pages.`);
     }
 
     function onSkewSliderChange(val) {
@@ -4114,9 +4390,9 @@
         const embPage = embeddedPages[i];
         const newPage = outDoc.addPage([targetPtW, targetPtH]);
 
-        // If Non-Uniform Staff Unroll (Dewarp) is enabled on this page, a 2x3 affine matrix cannot represent
-        // a non-uniform 2D mesh warp, so we render this page at high resolution with the non-uniform dewarp!
-        if (p.dewarp && p.dewarp.enabled && p.dewarp.data) {
+        // If Non-Uniform Staff Unroll (Dewarp) or a 4-Corner Perspective Unwarp Quad is enabled on this page,
+        // a 2x3 affine matrix cannot represent a non-affine warp, so we render this page at high resolution!
+        if ((p.dewarp && p.dewarp.enabled && p.dewarp.data) || hasPerspectiveQuad(p)) {
           showProgress('Exporting Unrolled PDF...', `Rendering high-res unrolled Page ${i + 1} of ${pagesData.length}`, pct);
           await sleep(15);
           const use1Bit = !!p.filters.binarize;

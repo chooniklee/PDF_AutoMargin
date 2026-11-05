@@ -914,20 +914,14 @@
       <div class="file-status" id="fileStatusText">No PDF Loaded</div>
     </div>
 
-    <div class="header-center">
-      <button class="view-tab active" data-view="split" onclick="setViewMode('split')">Split View (Crop + Output Preview)</button>
-      <button class="view-tab" data-view="editor" onclick="setViewMode('editor')">Crop Editor Only</button>
-      <button class="view-tab" data-view="grid" onclick="setViewMode('grid')">All Pages Grid</button>
-    </div>
-
     <div class="header-actions">
       <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" />
+      <button class="btn" id="btnToggleMobileUi" onclick="toggleMobileUiMode()" title="Switch between Simple Mobile UI and Full UI" style="border-color:#a855f7; color:#f3e8ff; background:rgba(168, 85, 247, 0.18);">📱 Simple UI</button>
       <button class="btn" onclick="document.getElementById('pdfFileInput').click()">📂 Open PDF</button>
       <button class="btn" id="btnUnrollAllHeader" style="border-color:#0ea5e9; color:#38bdf8;" onclick="autoDewarpAllPages()" disabled>🌊 Auto-Unroll All</button>
       <button class="btn btn-primary" id="btnAutoAll" onclick="autoDetectAllPages()" disabled>✨ Auto-Crop All Pages</button>
       <button class="btn" id="btnPreviewPdfHeader" style="border-color:#10b981; color:#6ee7b7;" onclick="previewAdjustedPdfInNewTab()" disabled title="Open adjusted PDF in a new browser tab">👁️ Open PDF Tab</button>
       <button class="btn btn-success" id="btnExportPdf" onclick="exportAdjustedPdf()" disabled>💾 Save As PDF</button>
-      <button class="btn btn-sm" id="btnToggleMobileUi" onclick="toggleMobileUiMode()" title="Switch between Simple Mobile UI and Full Desktop UI" style="padding:6px 8px;">📱 Simple UI</button>
     </div>
   </header>
 
@@ -1008,15 +1002,10 @@
     <!-- Right Controls Sidebar -->
     <aside class="sidebar-right">
 
-      <!-- Mobile Full UI Quick View Switcher & Accordion Controls -->
+      <!-- Mobile Full UI Accordion Controls Bar -->
       <div class="mobile-inspector-bar">
-        <div class="mobile-view-pills">
-          <button class="mobile-view-pill active" data-view="split" onclick="setViewMode('split')">Split</button>
-          <button class="mobile-view-pill" data-view="editor" onclick="setViewMode('editor')">Crop</button>
-          <button class="mobile-view-pill" data-view="preview" onclick="setViewMode('preview')">Result</button>
-          <button class="mobile-view-pill" data-view="grid" onclick="setViewMode('grid')">Grid</button>
-        </div>
-        <button class="btn btn-sm" id="btnToggleAllSections" onclick="toggleAllInspectorSections()" style="padding:4px 7px; font-size:0.7rem;">Expand All</button>
+        <span style="font-size:0.75rem; font-weight:700; color:#cbd5e1;">🎛️ Detailed Controls (Tap section to open)</span>
+        <button class="btn btn-sm" id="btnToggleAllSections" onclick="toggleAllInspectorSections()" style="padding:4px 8px; font-size:0.7rem;">Expand All</button>
       </div>
 
       <!-- 1. Semi-Auto Margin Detection -->
@@ -3143,64 +3132,57 @@
       }
 
       // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badges)
+      // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badge)
       // Strictly confined inside the user's adjusted crop box [cx1..cx2] and [cy1..cy2]
       if (typeof p.scoreRight === 'number') {
         const clampedSr = clamp(p.scoreRight, p.crop.left + 0.01, 1 - p.crop.right);
         const scoreRx = Math.round(clampedSr * W);
         const isDraggingAnchor = (dragMode === 'score-right');
-        editorCtx.strokeStyle = isDraggingAnchor ? '#fbbf24' : 'rgba(245, 158, 11, 0.9)';
-        editorCtx.lineWidth = isDraggingAnchor ? 2.5 : 1.8;
+        editorCtx.strokeStyle = isDraggingAnchor ? '#fbbf24' : 'rgba(245, 158, 11, 0.88)';
+        editorCtx.lineWidth = isDraggingAnchor ? 2.5 : 1.6;
         editorCtx.setLineDash([5, 3]);
         editorCtx.beginPath();
         editorCtx.moveTo(scoreRx, cy1);
         editorCtx.lineTo(scoreRx, cy2);
         editorCtx.stroke();
 
-        // Top & Bottom Anchor Badges (drawn strictly at the crop box top/bottom edges)
+        // Anchor text label pill badge (drawn inside the top of the crop box, shifted slightly left of cx2 so it never blocks the NE/E crop handles)
         editorCtx.setLineDash([]);
-        editorCtx.fillStyle = '#f59e0b';
-        editorCtx.strokeStyle = '#78350f';
-        editorCtx.lineWidth = 1.5;
-        // Top badge:
-        editorCtx.beginPath();
-        editorCtx.rect(scoreRx - 4, cy1, 8, 8);
-        editorCtx.fill();
-        editorCtx.stroke();
-        // Bottom badge:
-        editorCtx.beginPath();
-        editorCtx.rect(scoreRx - 4, cy2 - 8, 8, 8);
-        editorCtx.fill();
-        editorCtx.stroke();
-
-        // Anchor text label badge (drawn cleanly inside the top of the crop box)
         const labelText = `⚓ ${(clampedSr * 100).toFixed(1)}%`;
         editorCtx.font = 'bold 11px sans-serif';
         editorCtx.textAlign = 'center';
         const textMetrics = editorCtx.measureText(labelText);
-        const textW = textMetrics.width;
-        editorCtx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        editorCtx.fillRect(scoreRx - textW / 2 - 4, cy1 + 12, textW + 8, 16);
+        const pillW = textMetrics.width + 10;
+        const pillH = 18;
+        const pillCenterX = clamp(scoreRx, cx1 + pillW / 2 + 4, cx2 - pillW / 2 - 10);
+        const pillTopY = cy1 + 16;
+
+        editorCtx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+        editorCtx.fillRect(pillCenterX - pillW / 2, pillTopY, pillW, pillH);
         editorCtx.strokeStyle = '#f59e0b';
-        editorCtx.lineWidth = 1;
-        editorCtx.strokeRect(scoreRx - textW / 2 - 4, cy1 + 12, textW + 8, 16);
-        editorCtx.fillStyle = '#f59e0b';
-        editorCtx.fillText(labelText, scoreRx, cy1 + 24);
+        editorCtx.lineWidth = 1.2;
+        editorCtx.strokeRect(pillCenterX - pillW / 2, pillTopY, pillW, pillH);
+        editorCtx.fillStyle = '#fbbf24';
+        editorCtx.fillText(labelText, pillCenterX, pillTopY + 13);
       }
       editorCtx.restore();
 
       // 4. Draw Crop Border
       editorCtx.strokeStyle = '#3b82f6';
-      editorCtx.lineWidth = 2;
+      editorCtx.lineWidth = isMob ? 2.4 : 2;
       editorCtx.strokeRect(cx1, cy1, cw, ch);
 
-      // 5. Draw 8 Resize Handles
+      // 5. Draw 8 Resize Handles (Larger on mobile & clamped inside canvas bounds so edge handles are never clipped)
       const handles = getHandlePositions(cx1, cy1, cx2, cy2);
+      const hHalf = isMob ? 7 : 5;
       editorCtx.fillStyle = '#ffffff';
       editorCtx.strokeStyle = '#2563eb';
-      editorCtx.lineWidth = 2;
+      editorCtx.lineWidth = isMob ? 2.4 : 2;
       for (const hPos of Object.values(handles)) {
+        const hx = clamp(hPos.x, hHalf + 1, W - hHalf - 1);
+        const hy = clamp(hPos.y, hHalf + 1, H - hHalf - 1);
         editorCtx.beginPath();
-        editorCtx.rect(hPos.x - 5, hPos.y - 5, 10, 10);
+        editorCtx.rect(hx - hHalf, hy - hHalf, hHalf * 2, hHalf * 2);
         editorCtx.fill();
         editorCtx.stroke();
       }
@@ -3554,30 +3536,49 @@
       const y1 = p.crop.top * H;
       const x2 = (1 - p.crop.right) * W;
       const y2 = (1 - p.crop.bottom) * H;
-      const anchorTol = isTouch ? 18 : 8;
-      const hitDist = isTouch ? 20 : 10;
-      const edgeTol = isTouch ? 14 : 7;
+      const hitDist = isTouch ? 28 : 11;
+      const edgeTol = isTouch ? 20 : 8;
 
-      // 1. Test Score Right Anchor line (strictly within crop vertical span)
+      // 1. Highest Priority: Test the 8 blue crop handles FIRST (pick closest handle within hitDist)
+      const handles = getHandlePositions(x1, y1, x2, y2);
+      let bestHandle = null;
+      let bestDist = Infinity;
+      for (const [name, pos] of Object.entries(handles)) {
+        const d = Math.hypot(mx - pos.x, my - pos.y);
+        if (Math.abs(mx - pos.x) <= hitDist && Math.abs(my - pos.y) <= hitDist && d < bestDist) {
+          bestDist = d;
+          bestHandle = name;
+        }
+      }
+      if (bestHandle) return bestHandle;
+
+      // 2. Test the Orange Score Right Anchor pill badge (⚓ XX.X% at y1 + 16..34)
       if (typeof p.scoreRight === 'number') {
-        const clampedSr = clamp(p.scoreRight, p.crop.left, 1 - p.crop.right);
+        const clampedSr = clamp(p.scoreRight, p.crop.left + 0.01, 1 - p.crop.right);
         const scoreRx = clampedSr * W;
-        if (Math.abs(mx - scoreRx) <= anchorTol && my >= y1 && my <= y2) {
+        const pillCenterX = clamp(scoreRx, x1 + 32, x2 - 36);
+        const badgeTolX = isTouch ? 30 : 24;
+        if (my >= y1 + 12 && my <= y1 + 38 && Math.abs(mx - pillCenterX) <= badgeTolX) {
           return 'score-right';
         }
       }
 
-      // 2. Test 8 crop handles
-      const handles = getHandlePositions(x1, y1, x2, y2);
-      for (const [name, pos] of Object.entries(handles)) {
-        if (Math.abs(mx - pos.x) <= hitDist && Math.abs(my - pos.y) <= hitDist) {
-          return name;
+      // 3. Test the 4 blue crop border edges (n, s, w, e) BEFORE the orange line shaft
+      // so dragging the right crop border (e) never accidentally grabs the orange anchor line!
+      if (mx >= x1 - edgeTol && mx <= x2 + edgeTol && Math.abs(my - y1) <= edgeTol) return 'n';
+      if (mx >= x1 - edgeTol && mx <= x2 + edgeTol && Math.abs(my - y2) <= edgeTol) return 's';
+      if (my >= y1 - edgeTol && my <= y2 + edgeTol && Math.abs(mx - x1) <= edgeTol) return 'w';
+      if (my >= y1 - edgeTol && my <= y2 + edgeTol && Math.abs(mx - x2) <= edgeTol) return 'e';
+
+      // 4. Test the vertical orange anchor shaft only when clearly separated from the right crop edge x2
+      if (typeof p.scoreRight === 'number') {
+        const clampedSr = clamp(p.scoreRight, p.crop.left + 0.01, 1 - p.crop.right);
+        const scoreRx = clampedSr * W;
+        const shaftTol = isTouch ? 10 : 7;
+        if (Math.abs(mx - scoreRx) <= shaftTol && my >= y1 && my <= y2) {
+          return 'score-right';
         }
       }
-      if (mx >= x1 && mx <= x2 && Math.abs(my - y1) <= edgeTol) return 'n';
-      if (mx >= x1 && mx <= x2 && Math.abs(my - y2) <= edgeTol) return 's';
-      if (my >= y1 && my <= y2 && Math.abs(mx - x1) <= edgeTol) return 'w';
-      if (my >= y1 && my <= y2 && Math.abs(mx - x2) <= edgeTol) return 'e';
 
       // On touch devices, only capture handles, edges, and the score-right anchor line so vertical swipes inside the score can scroll into iOS Safari Fullscreen mode
       if (!isTouch && mx > x1 && mx < x2 && my > y1 && my < y2) {

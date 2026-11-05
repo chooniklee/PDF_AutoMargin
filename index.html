@@ -990,9 +990,14 @@
       <div class="stage-content" id="editorStageContainer">
         <!-- Left Pane: Source Crop Editor -->
         <div class="pane" id="editorPane">
-          <div class="pane-title">
-            <span>✂️ Source Scan & Crop Box</span>
-            <span id="cropSizeReadout" style="color:#93c5fd;"></span>
+          <div class="pane-header-row" style="display:flex; align-items:center; gap:6px; flex-shrink:0; align-self:flex-start; max-width:100%; flex-wrap:wrap;">
+            <div class="pane-title">
+              <span>✂️ Source Scan & Crop Box</span>
+              <span id="cropSizeReadout" style="color:#93c5fd;"></span>
+            </div>
+            <button class="btn btn-sm" id="btnResetQuadCorners" onclick="resetQuadToRectCurrentPage()" style="padding:3px 9px; font-size:0.72rem; border-color:#38bdf8; color:#bae6fd; background:rgba(14, 165, 233, 0.16); pointer-events:auto;" title="Snap all 4 corners back to a straight rectangle">
+              ⬜ Reset 4 Corners
+            </button>
           </div>
           <div class="canvas-container">
             <canvas id="editorCanvas"></canvas>
@@ -1095,9 +1100,6 @@
           <button class="btn btn-sm" onclick="applyCropToScope('all')">Copy to All Pages</button>
           <button class="btn btn-sm" onclick="applyCropToScope('parity')">Copy to Odd/Even</button>
         </div>
-        <button class="btn btn-sm" style="margin-top:4px; width:100%;" onclick="resetQuadToRectCurrentPage()" title="Snap all 4 corners back to a straight rectangle">
-          ⬜ Reset 4 Corners to Rectangle
-        </button>
       </div>
 
       <!-- 3. Deskew, Staff Unroll & Image Enhancement -->
@@ -3105,7 +3107,8 @@
     function renderEditorCanvas() {
       const pane = document.getElementById('editorPane');
       const isMob = isMobileUiMode || document.body.classList.contains('is-mobile-device');
-      const titleH = pane.querySelector('.pane-title')?.offsetHeight || 24;
+      const headerEl = pane.querySelector('.pane-header-row') || pane.querySelector('.pane-title');
+      const titleH = headerEl?.offsetHeight || 24;
       const padX = isMob ? 12 : 28;
       const padY = (isMob ? 16 : 32) + titleH;
       const availW = Math.max(100, pane.clientWidth - padX);
@@ -3136,14 +3139,31 @@
 
       const W = cssW;
       const H = cssH;
+      const q = ensurePageQuad(p);
+      const isPersp = hasPerspectiveQuad(p);
 
-      // 1. Draw full transformed page at Retina / High-DPI resolution
+      // 1. Draw full page at Retina / High-DPI resolution — immediately applying the 4-corner Perspective Unwarp
+      //    in the Source Panel so the user can see the straightened score and fine-tune the orange anchor (⚓) directly!
       editorCtx.imageSmoothingEnabled = true;
       editorCtx.imageSmoothingQuality = 'high';
-      editorCtx.drawImage(transCanvas, 0, 0, W, H);
+      if (isPersp) {
+        const unwarpedFull = getOrCreateUnwarpedEditorCanvas(
+          currentPageIdx,
+          transCanvas,
+          q,
+          p.crop,
+          Math.round(W * dpr),
+          Math.round(H * dpr),
+          isInteracting
+        );
+        editorCtx.drawImage(unwarpedFull, 0, 0, W, H);
+      } else {
+        editorCtx.drawImage(transCanvas, 0, 0, W, H);
+      }
 
-      // 2. Darken outside 4-corner crop quad (supports arbitrary perspective quad via evenodd fill rule)
-      const q = ensurePageQuad(p);
+      // 2. Darken outside the unwrapped crop rectangle [cx1, cy1, cx2, cy2]
+      //    (Since the image on editorCanvas is now perspective-unwarped into [cx1..cx2] x [cy1..cy2],
+      //     this rectangle is the exact cropped area sent to Target Paper Preview!)
       const nwPx = { x: q.nw.x * W, y: q.nw.y * H };
       const nePx = { x: q.ne.x * W, y: q.ne.y * H };
       const sePx = { x: q.se.x * W, y: q.se.y * H };
@@ -3153,43 +3173,32 @@
       const cy1 = Math.round(p.crop.top * H);
       const cx2 = Math.round((1 - p.crop.right) * W);
       const cy2 = Math.round((1 - p.crop.bottom) * H);
+      const cw = Math.max(10, cx2 - cx1);
+      const ch = Math.max(10, cy2 - cy1);
 
-      editorCtx.save();
       editorCtx.fillStyle = 'rgba(15, 23, 42, 0.58)';
-      editorCtx.beginPath();
-      editorCtx.rect(0, 0, W, H);
-      editorCtx.moveTo(nwPx.x, nwPx.y);
-      editorCtx.lineTo(nePx.x, nePx.y);
-      editorCtx.lineTo(sePx.x, sePx.y);
-      editorCtx.lineTo(swPx.x, swPx.y);
-      editorCtx.closePath();
-      editorCtx.fill('evenodd');
-      editorCtx.restore();
+      editorCtx.fillRect(0, 0, W, cy1);
+      editorCtx.fillRect(0, cy2, W, H - cy2);
+      editorCtx.fillRect(0, cy1, cx1, ch);
+      editorCtx.fillRect(cx2, cy1, W - cx2, ch);
 
-      // 3. Draw perspective-interpolated alignment reference grid inside the 4-corner quad
+      // 3. Draw horizontal & vertical alignment reference grid inside the unwrapped crop box
       editorCtx.save();
-      editorCtx.strokeStyle = isInteracting ? 'rgba(59, 130, 246, 0.45)' : 'rgba(59, 130, 246, 0.22)';
+      editorCtx.strokeStyle = isInteracting ? 'rgba(59, 130, 246, 0.48)' : 'rgba(59, 130, 246, 0.24)';
       editorCtx.lineWidth = 1;
       editorCtx.setLineDash([4, 4]);
       const steps = 8;
       for (let i = 1; i < steps; i++) {
-        const t = i / steps;
-        const lx = nwPx.x + (swPx.x - nwPx.x) * t;
-        const ly = nwPx.y + (swPx.y - nwPx.y) * t;
-        const rx = nePx.x + (sePx.x - nePx.x) * t;
-        const ry = nePx.y + (sePx.y - nePx.y) * t;
+        const gy = Math.round(cy1 + (ch * i) / steps);
         editorCtx.beginPath();
-        editorCtx.moveTo(lx, ly);
-        editorCtx.lineTo(rx, ry);
+        editorCtx.moveTo(cx1, gy);
+        editorCtx.lineTo(cx2, gy);
         editorCtx.stroke();
       }
-      const topMidX = (nwPx.x + nePx.x) / 2;
-      const topMidY = (nwPx.y + nePx.y) / 2;
-      const botMidX = (swPx.x + sePx.x) / 2;
-      const botMidY = (swPx.y + sePx.y) / 2;
+      const gxMid = Math.round(cx1 + cw / 2);
       editorCtx.beginPath();
-      editorCtx.moveTo(topMidX, topMidY);
-      editorCtx.lineTo(botMidX, botMidY);
+      editorCtx.moveTo(gxMid, cy1);
+      editorCtx.lineTo(gxMid, cy2);
       editorCtx.stroke();
 
       // 3b. Draw Detected Staff Curves & Straightened Horizontal Ruler Overlay if enabled
@@ -3226,9 +3235,8 @@
         }
       }
 
-      // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badges)
       // Draw detected Music Score Right Edge reference line (amber dashed line with interactive drag badge)
-      // Strictly confined inside the user's adjusted crop box [cx1..cx2] and [cy1..cy2]
+      // Directly on top of the perspective-unwarped score so it aligns 100% with Target Paper Preview!
       if (typeof p.scoreRight === 'number') {
         const clampedSr = clamp(p.scoreRight, p.crop.left + 0.01, 1 - p.crop.right);
         const scoreRx = Math.round(clampedSr * W);
@@ -3262,17 +3270,25 @@
       }
       editorCtx.restore();
 
-      // 4. Draw 4-Corner Crop Quad Border
-      const isPersp = hasPerspectiveQuad(p);
-      editorCtx.strokeStyle = isPersp ? '#38bdf8' : '#3b82f6';
+      // 4. Draw Unwrapped Crop Border [cx1, cy1, cw, ch] + 4-Corner Perspective Quad Guide
+      editorCtx.strokeStyle = '#3b82f6';
       editorCtx.lineWidth = isMob ? 2.4 : 2;
-      editorCtx.beginPath();
-      editorCtx.moveTo(nwPx.x, nwPx.y);
-      editorCtx.lineTo(nePx.x, nePx.y);
-      editorCtx.lineTo(sePx.x, sePx.y);
-      editorCtx.lineTo(swPx.x, swPx.y);
-      editorCtx.closePath();
-      editorCtx.stroke();
+      editorCtx.strokeRect(cx1, cy1, cw, ch);
+
+      if (isPersp) {
+        editorCtx.save();
+        editorCtx.strokeStyle = 'rgba(56, 189, 248, 0.85)';
+        editorCtx.lineWidth = 1.5;
+        editorCtx.setLineDash([5, 4]);
+        editorCtx.beginPath();
+        editorCtx.moveTo(nwPx.x, nwPx.y);
+        editorCtx.lineTo(nePx.x, nePx.y);
+        editorCtx.lineTo(sePx.x, sePx.y);
+        editorCtx.lineTo(swPx.x, swPx.y);
+        editorCtx.closePath();
+        editorCtx.stroke();
+        editorCtx.restore();
+      }
 
       // 5. Draw 8 Resize Handles:
       //    - 4 Corner Handles (nw, ne, se, sw): Circular vertices that move independently for perspective unwrap
@@ -3302,6 +3318,10 @@
       const hPct = ((1 - p.crop.top - p.crop.bottom) * 100).toFixed(1);
       document.getElementById('cropSizeReadout').textContent =
         isPersp ? `Crop: ${wPct}% W × ${hPct}% H · Perspective Unwarp` : `Crop Area: ${wPct}% W × ${hPct}% H`;
+      const btnResetQuad = document.getElementById('btnResetQuadCorners');
+      if (btnResetQuad) {
+        btnResetQuad.style.opacity = isPersp ? '1' : '0.55';
+      }
     }
 
     function getHandlePositions(q, W, H) {
@@ -3459,6 +3479,130 @@
       };
     }
 
+    let cachedUnwarpedEditor = { key: '', canvas: null };
+    let cachedUnwarpedCrop = { key: '', canvas: null };
+
+    // Full-page 3x3 Projective Homography Unwarp for the Source Panel (editorCanvas):
+    // Maps the crop rectangle [crop.left .. 1-crop.right] x [crop.top .. 1-crop.bottom] on editorCanvas
+    // to the 4-corner quad (nw, ne, se, sw) on sourceCanvas, and extends smoothly across the full page margins!
+    function createPerspectiveUnwarpedFullPageCanvas(sourceCanvas, quad, crop, reqW, reqH, fastPreview = false) {
+      const srcW = sourceCanvas.width;
+      const srcH = sourceCanvas.height;
+      const maxDim = fastPreview ? 680 : 2400;
+      const scaleDown = Math.min(1, maxDim / Math.max(1, reqW, reqH));
+      const outW = Math.max(4, Math.round(reqW * scaleDown));
+      const outH = Math.max(4, Math.round(reqH * scaleDown));
+
+      const x0 = quad.nw.x * srcW, y0 = quad.nw.y * srcH;
+      const x1 = quad.ne.x * srcW, y1 = quad.ne.y * srcH;
+      const x2 = quad.se.x * srcW, y2 = quad.se.y * srcH;
+      const x3 = quad.sw.x * srcW, y3 = quad.sw.y * srcH;
+
+      const dx1 = x1 - x2, dx2 = x3 - x2, sx = x0 - x1 + x2 - x3;
+      const dy1 = y1 - y2, dy2 = y3 - y2, sy = y0 - y1 + y2 - y3;
+      const det = dx1 * dy2 - dx2 * dy1;
+
+      let g = 0, h = 0;
+      if (Math.abs(det) > 1e-8) {
+        g = (sx * dy2 - dx2 * sy) / det;
+        h = (dx1 * sy - sx * dy1) / det;
+      }
+      const a = x1 - x0 + g * x1;
+      const b = x3 - x0 + h * x3;
+      const c = x0;
+      const d = y1 - y0 + g * y1;
+      const e = y3 - y0 + h * y3;
+      const f = y0;
+
+      const srcCtx = sourceCanvas.getContext('2d', { willReadFrequently: true });
+      const srcData = srcCtx.getImageData(0, 0, srcW, srcH).data;
+
+      const outCanvas = document.createElement('canvas');
+      outCanvas.width = outW;
+      outCanvas.height = outH;
+      const outCtx = outCanvas.getContext('2d');
+      const outImg = outCtx.createImageData(outW, outH);
+      const dstData = outImg.data;
+
+      const invW = outW > 1 ? 1 / (outW - 1) : 0;
+      const invH = outH > 1 ? 1 / (outH - 1) : 0;
+      const cropL = crop.left;
+      const cropT = crop.top;
+      const invCropW = 1 / Math.max(0.05, 1 - crop.left - crop.right);
+      const invCropH = 1 / Math.max(0.05, 1 - crop.top - crop.bottom);
+      const maxX = srcW - 1;
+      const maxY = srcH - 1;
+
+      let dstIdx = 0;
+      for (let py = 0; py < outH; py++) {
+        const yNorm = py * invH;
+        const v = (yNorm - cropT) * invCropH;
+        const bv_c = b * v + c;
+        const ev_f = e * v + f;
+        const hv_1 = h * v + 1;
+
+        for (let px = 0; px < outW; px++) {
+          const xNorm = px * invW;
+          const u = (xNorm - cropL) * invCropW;
+          const w = g * u + hv_1;
+          if (w <= 0.05) {
+            dstData[dstIdx] = 255;
+            dstData[dstIdx + 1] = 255;
+            dstData[dstIdx + 2] = 255;
+            dstData[dstIdx + 3] = 255;
+            dstIdx += 4;
+            continue;
+          }
+          const srcX = (a * u + bv_c) / w;
+          const srcY = (d * u + ev_f) / w;
+
+          if (srcX < 0 || srcX > maxX || srcY < 0 || srcY > maxY) {
+            dstData[dstIdx] = 255;
+            dstData[dstIdx + 1] = 255;
+            dstData[dstIdx + 2] = 255;
+            dstData[dstIdx + 3] = 255;
+          } else {
+            const ix = srcX | 0;
+            const iy = srcY | 0;
+            const fx = srcX - ix;
+            const fy = srcY - iy;
+            const ix1 = ix < maxX ? ix + 1 : maxX;
+            const iy1 = iy < maxY ? iy + 1 : maxY;
+
+            const idx00 = (iy * srcW + ix) << 2;
+            const idx10 = (iy * srcW + ix1) << 2;
+            const idx01 = (iy1 * srcW + ix) << 2;
+            const idx11 = (iy1 * srcW + ix1) << 2;
+
+            const w00 = (1 - fx) * (1 - fy);
+            const w10 = fx * (1 - fy);
+            const w01 = (1 - fx) * fy;
+            const w11 = fx * fy;
+
+            dstData[dstIdx]     = (srcData[idx00] * w00 + srcData[idx10] * w10 + srcData[idx01] * w01 + srcData[idx11] * w11 + 0.5) | 0;
+            dstData[dstIdx + 1] = (srcData[idx00 + 1] * w00 + srcData[idx10 + 1] * w10 + srcData[idx01 + 1] * w01 + srcData[idx11 + 1] * w11 + 0.5) | 0;
+            dstData[dstIdx + 2] = (srcData[idx00 + 2] * w00 + srcData[idx10 + 2] * w10 + srcData[idx01 + 2] * w01 + srcData[idx11 + 2] * w11 + 0.5) | 0;
+            dstData[dstIdx + 3] = 255;
+          }
+          dstIdx += 4;
+        }
+      }
+
+      outCtx.putImageData(outImg, 0, 0);
+      return outCanvas;
+    }
+
+    function getOrCreateUnwarpedEditorCanvas(pageIdx, sourceCanvas, quad, crop, reqW, reqH, fastPreview) {
+      const fastWarp = fastPreview && (dragMode !== 'score-right');
+      const key = `${pageIdx}|${cachedTransformed.key}|${quad.nw.x},${quad.nw.y},${quad.ne.x},${quad.ne.y},${quad.se.x},${quad.se.y},${quad.sw.x},${quad.sw.y}|${crop.left},${crop.right},${crop.top},${crop.bottom}|${reqW}x${reqH}|${fastWarp ? 1 : 0}`;
+      if (cachedUnwarpedEditor.key === key && cachedUnwarpedEditor.canvas) {
+        return cachedUnwarpedEditor.canvas;
+      }
+      const c = createPerspectiveUnwarpedFullPageCanvas(sourceCanvas, quad, crop, reqW, reqH, fastWarp);
+      cachedUnwarpedEditor = { key, canvas: c };
+      return c;
+    }
+
     // Closed-form 3x3 Projective Homography Unwarp (Paul Heckbert unit-square-to-quad mapping)
     // Unwraps the arbitrary 4-corner quadrilateral (nw, ne, se, sw) from sourceCanvas into a rectangular canvas (outW x outH)
     function createPerspectiveUnwarpedCropCanvas(sourceCanvas, quad, reqW, reqH, fastPreview = false) {
@@ -3579,13 +3723,24 @@
       ctx.imageSmoothingQuality = 'high';
 
       if (hasPerspectiveQuad(p)) {
-        const unwarpedCanvas = createPerspectiveUnwarpedCropCanvas(
-          sourceCanvas,
-          ensurePageQuad(p),
-          destPxW,
-          destPxH,
-          isInteracting && showGuides
-        );
+        const q = ensurePageQuad(p);
+        const fastWarp = isInteracting && showGuides && (dragMode !== 'score-right');
+        const cacheKey = showGuides
+          ? `${pageIdx}|${cachedTransformed.key}|${q.nw.x},${q.nw.y},${q.ne.x},${q.ne.y},${q.se.x},${q.se.y},${q.sw.x},${q.sw.y}|${Math.round(destPxW)}x${Math.round(destPxH)}|${fastWarp ? 1 : 0}`
+          : '';
+        let unwarpedCanvas;
+        if (cacheKey && cachedUnwarpedCrop.key === cacheKey && cachedUnwarpedCrop.canvas) {
+          unwarpedCanvas = cachedUnwarpedCrop.canvas;
+        } else {
+          unwarpedCanvas = createPerspectiveUnwarpedCropCanvas(
+            sourceCanvas,
+            q,
+            destPxW,
+            destPxH,
+            fastWarp
+          );
+          if (cacheKey) cachedUnwarpedCrop = { key: cacheKey, canvas: unwarpedCanvas };
+        }
         ctx.drawImage(unwarpedCanvas, destPxX, destPxY, destPxW, destPxH);
       } else {
         const sx = p.crop.left * sourceCanvas.width;
@@ -3806,10 +3961,22 @@
 
       // 3. Test the 4 blue crop border edges (n, s, w, e) BEFORE the orange line shaft
       // so dragging a side edge moves that whole side together!
-      if (distToSegment(mx, my, handles.nw.x, handles.nw.y, handles.ne.x, handles.ne.y) <= edgeTol) return 'n';
-      if (distToSegment(mx, my, handles.sw.x, handles.sw.y, handles.se.x, handles.se.y) <= edgeTol) return 's';
-      if (distToSegment(mx, my, handles.nw.x, handles.nw.y, handles.sw.x, handles.sw.y) <= edgeTol) return 'w';
-      if (distToSegment(mx, my, handles.ne.x, handles.ne.y, handles.se.x, handles.se.y) <= edgeTol) return 'e';
+      if (
+        (mx >= x1 - edgeTol && mx <= x2 + edgeTol && Math.abs(my - y1) <= edgeTol) ||
+        distToSegment(mx, my, handles.nw.x, handles.nw.y, handles.ne.x, handles.ne.y) <= edgeTol
+      ) return 'n';
+      if (
+        (mx >= x1 - edgeTol && mx <= x2 + edgeTol && Math.abs(my - y2) <= edgeTol) ||
+        distToSegment(mx, my, handles.sw.x, handles.sw.y, handles.se.x, handles.se.y) <= edgeTol
+      ) return 's';
+      if (
+        (my >= y1 - edgeTol && my <= y2 + edgeTol && Math.abs(mx - x1) <= edgeTol) ||
+        distToSegment(mx, my, handles.nw.x, handles.nw.y, handles.sw.x, handles.sw.y) <= edgeTol
+      ) return 'w';
+      if (
+        (my >= y1 - edgeTol && my <= y2 + edgeTol && Math.abs(mx - x2) <= edgeTol) ||
+        distToSegment(mx, my, handles.ne.x, handles.ne.y, handles.se.x, handles.se.y) <= edgeTol
+      ) return 'e';
 
       // 4. Test the vertical orange anchor shaft only when clearly separated from the right crop edge
       if (typeof p.scoreRight === 'number') {

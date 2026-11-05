@@ -760,12 +760,13 @@
 
     body.mobile-mode header,
     body.is-mobile-device header {
-      height: 48px;
-      padding: 0 10px;
+      height: auto;
+      min-height: 44px;
+      padding: 6px 10px;
       gap: 6px;
-      overflow-x: auto;
-      position: sticky;
-      top: 0;
+      flex-wrap: wrap;
+      overflow: visible;
+      position: relative;
       z-index: 60;
     }
 
@@ -776,21 +777,23 @@
 
     body.mobile-mode .file-status,
     body.is-mobile-device .file-status {
-      max-width: 120px;
+      max-width: 220px;
       font-size: 0.73rem;
       padding: 4px 8px;
     }
 
     body.mobile-mode .header-actions,
     body.is-mobile-device .header-actions {
-      gap: 6px;
-      flex-shrink: 0;
+      gap: 5px;
+      flex-wrap: wrap;
+      width: 100%;
+      justify-content: flex-start;
     }
 
     body.mobile-mode .btn,
     body.is-mobile-device header .btn {
-      padding: 6px 10px;
-      font-size: 0.75rem;
+      padding: 6px 9px;
+      font-size: 0.74rem;
     }
 
     body.mobile-mode .stage-toolbar,
@@ -884,9 +887,9 @@
     body.mobile-mode .workspace,
     body.is-mobile-device .workspace {
       position: sticky;
-      top: 48px;
-      height: calc(100vh - 48px);
-      height: calc(100dvh - 48px);
+      top: 0;
+      height: 100vh;
+      height: 100dvh;
       flex: none;
     }
 
@@ -1175,13 +1178,13 @@
         <div class="control-row">
           <span class="control-label">Scaling Mode</span>
           <select id="selScaleMode" onchange="onOutputConfigChange()" style="width:195px;">
-            <option value="uniform" selected>Uniform Staff Scale (Recommended)</option>
-            <option value="fit">Scale Each Page to Fit Margins</option>
+            <option value="fit" selected>Scale Each Page to Fit Margins</option>
+            <option value="uniform">Uniform Staff Scale</option>
           </select>
         </div>
 
         <div class="section-subtitle" id="scaleModeDesc" style="color:#93c5fd;">
-          • Keeps a uniform scaling factor across all pages so staff sizes never jump from page to page.
+          • Scales each page’s cropped score individually to fill the target paper margins.
         </div>
 
         <div class="control-row" style="margin-top:4px;">
@@ -3305,24 +3308,27 @@
 
       const scaleMmPerPt = (scaleMode === 'uniform')
         ? uniformMmPerPt
-        : Math.min(availWMm / totalEnvelopePtW, availHMm / cropPtH);
+        : Math.min(availWMm / cropPtW, availHMm / cropPtH);
 
       const drawWMm = cropPtW * scaleMmPerPt;
       const drawHMm = cropPtH * scaleMmPerPt;
 
-      // Lock the orange Score Right Anchor line at a fixed horizontal coordinate across all pages
-      // so left-side page numbers (e.g. 136) sit to the left of the score and right-side page numbers (e.g. 137)
-      // sit to the right of the orange line without ever shifting the score horizontally!
+      // Align the orange Score Right Anchor line across pages while clamping within [effLeftMm, effLeftMm + availWMm - drawWMm]
       const envLeftMm = maxLeftFromScoreRightPt * scaleMmPerPt;
       const envRightMm = maxRightFromScoreRightPt * scaleMmPerPt;
       const totalEnvMm = envLeftMm + envRightMm;
-      const targetScoreRightXMm = effLeftMm + (availWMm - totalEnvMm) / 2 + envLeftMm;
+      const idealScoreRightXMm = effLeftMm + (availWMm - totalEnvMm) / 2 + envLeftMm;
 
       const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
       const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
       const leftFromScoreRightMm = (sr - p.crop.left) * p.origWidth * scaleMmPerPt;
 
-      const destXMm = targetScoreRightXMm - leftFromScoreRightMm;
+      const minDestX = effLeftMm;
+      const maxDestX = Math.max(effLeftMm, effLeftMm + availWMm - drawWMm);
+      const destXMm = (scaleMode === 'uniform')
+        ? (idealScoreRightXMm - leftFromScoreRightMm)
+        : clamp(idealScoreRightXMm - leftFromScoreRightMm, minDestX, maxDestX);
+      const targetScoreRightXMm = destXMm + leftFromScoreRightMm;
       const destYMm = mTop + (availHMm - drawHMm) / 2;
 
       return {

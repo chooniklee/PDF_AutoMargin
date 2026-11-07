@@ -517,6 +517,7 @@
       border-bottom: 1px solid var(--border);
       display: flex;
       flex-direction: column;
+      flex-shrink: 0;
       gap: 9px;
       transition: background 0.15s;
     }
@@ -2462,11 +2463,64 @@
       }
 
       // Optional: Mask out top/bottom outer corner page numbers if enabled
+      // Uses a generous base corner box (14.5% W x 7.6% H) PLUS adaptive downward digit-tail continuation
+      // (up to 10.8% H) so the bottom pixels / anti-aliased fringes of low-sitting page numbers are 100% erased!
       const maskCornersEl = document.getElementById('chkMaskCorners');
       if (maskCornersEl && maskCornersEl.checked) {
+        const cornerW = Math.round(w * 0.145);
+        const baseTopH = Math.round(h * 0.076);
+        const scanStartY = Math.round(h * 0.048);
+        const maxExtendY = Math.round(h * 0.108);
+
+        function computeCornerMaskHeight(xStart, stripW) {
+          const stripData = ctx.getImageData(xStart, scanStartY, stripW, maxExtendY - scanStartY).data;
+          const rows = maxExtendY - scanStartY;
+          const maxDigitSpan = Math.round(w * 0.075);
+          const minGapRows = Math.max(4, Math.round(h * 0.004));
+          let maskEndRow = baseTopH - scanStartY;
+          let seenInkInCorner = false;
+          let cleanGapCount = 0;
+
+          for (let r = 0; r < rows; r++) {
+            const rowOff = r * stripW * 4;
+            let darkCount = 0;
+            let minX = stripW, maxX = -1;
+            for (let c = 0; c < stripW; c++) {
+              const p = rowOff + (c << 2);
+              const lum = (stripData[p] * 77 + stripData[p + 1] * 150 + stripData[p + 2] * 29) >> 8;
+              if (lum < 228) {
+                darkCount++;
+                if (c < minX) minX = c;
+                if (c > maxX) maxX = c;
+              }
+            }
+            const span = maxX >= minX ? (maxX - minX + 1) : 0;
+            // If ink is wider than a page number (e.g. a music staff or title), stop before touching it
+            if (span > maxDigitSpan || darkCount > Math.round(stripW * 0.42)) {
+              break;
+            }
+            if (darkCount > 0) {
+              seenInkInCorner = true;
+              cleanGapCount = 0;
+              if (r > maskEndRow) maskEndRow = r;
+            } else if (seenInkInCorner && r >= (baseTopH - scanStartY - 4)) {
+              cleanGapCount++;
+              if (cleanGapCount >= minGapRows) {
+                maskEndRow = Math.max(maskEndRow, r);
+                break;
+              }
+            }
+          }
+          const extraPad = Math.max(4, Math.round(h * 0.004));
+          return Math.min(maxExtendY, Math.max(baseTopH, scanStartY + maskEndRow + extraPad));
+        }
+
+        const leftMaskH = computeCornerMaskHeight(0, cornerW);
+        const rightMaskH = computeCornerMaskHeight(w - cornerW, cornerW);
+
         ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, Math.round(w * 0.112), Math.round(h * 0.055));
-        ctx.fillRect(Math.round(w * 0.888), 0, Math.round(w * 0.112), Math.round(h * 0.055));
+        ctx.fillRect(0, 0, cornerW, leftMaskH);
+        ctx.fillRect(w - cornerW, 0, cornerW, rightMaskH);
       }
 
       // Apply pixel filters (White point cleanup, contrast, optional staff-preserving 1-bit binarization)
@@ -2527,7 +2581,12 @@
 
     function onMaskCornersChange() {
       cachedTransformed.pageIdx = -1;
-      if (pdfDoc) renderActiveView();
+      cachedUnwarpedEditor = { key: '', canvas: null };
+      cachedUnwarpedCrop = { key: '', canvas: null };
+      if (pdfDoc) {
+        drawThumbnail(currentPageIdx);
+        renderActiveView();
+      }
     }
 
     // ============================================================================
@@ -2548,9 +2607,9 @@
       function isCornerZone(x, y) {
         const nx = x / w;
         const ny = y / h;
-        const inLeftCorner = nx < 0.115;
-        const inRightCorner = nx > 0.885;
-        const inTopCorner = ny < 0.068;
+        const inLeftCorner = nx < 0.145;
+        const inRightCorner = nx > 0.855;
+        const inTopCorner = ny < 0.078;
         const inBottomCorner = ny > 0.940;
         return (inLeftCorner || inRightCorner) && (inTopCorner || inBottomCorner);
       }
@@ -2911,13 +2970,18 @@
       p.skewDeg = 0; // Unroll implicitly straightens global tilt as well as spine curvature
       document.getElementById('chkShowStaffOverlay').checked = true;
       cachedTransformed.pageIdx = -1;
-      computeAutoCropForPage(p);
+      // Preserve the user's crop & 4-corner quad, only re-detecting the Score Right Anchor within the current crop!
+      p.rawBounds = null;
+      analyzePageInkBounds(p, true);
+      const maxSr = round4(1 - p.crop.right);
+      const minSr = round4(p.crop.left + 0.02);
+      p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
       syncInspectorFromPage();
       drawThumbnail(currentPageIdx);
       renderActiveView();
       const nStaves = p.dewarp.data.staves.length;
       const maxPx = p.dewarp.data.maxPageWarpPx.toFixed(1);
-      showToast(`🌊 Page ${currentPageIdx + 1} unrolled & deskewed! (${nStaves} staves straightened, max curve ${maxPx}px → flat)`);
+      showToast(`🌊 Page ${currentPageIdx + 1} unrolled & deskewed! (${nStaves} staves straightened, crop preserved)`);
     }
 
     async function autoDewarpAllPages() {
@@ -2933,10 +2997,14 @@
         }
         p.dewarp.enabled = true;
         p.skewDeg = 0; // Unroll implicitly straightens global tilt as well as spine curvature
-        analyzePageInkBounds(p);
+        // Preserve each page's existing crop & 4-corner quad, only re-detecting Score Right Anchor within crop!
+        p.rawBounds = null;
+        analyzePageInkBounds(p, true);
+        const maxSr = round4(1 - p.crop.right);
+        const minSr = round4(p.crop.left + 0.02);
+        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
       }
       document.getElementById('chkShowStaffOverlay').checked = true;
-      applyUniformScoreRightCropToPages();
       for (let i = 0; i < pagesData.length; i++) {
         drawThumbnail(i);
       }
@@ -2944,7 +3012,7 @@
       syncInspectorFromPage();
       renderActiveView();
       hideProgress();
-      showToast(`🌊 All ${pagesData.length} pages unrolled, deskewed, and auto-cropped!`);
+      showToast(`🌊 All ${pagesData.length} pages unrolled & deskewed (existing crop adjustments preserved)!`);
     }
 
     function onToggleDewarpEnabled(checked) {
@@ -3594,7 +3662,8 @@
 
     function getOrCreateUnwarpedEditorCanvas(pageIdx, sourceCanvas, quad, crop, reqW, reqH, fastPreview) {
       const fastWarp = fastPreview && (dragMode !== 'score-right');
-      const key = `${pageIdx}|${cachedTransformed.key}|${quad.nw.x},${quad.nw.y},${quad.ne.x},${quad.ne.y},${quad.se.x},${quad.se.y},${quad.sw.x},${quad.sw.y}|${crop.left},${crop.right},${crop.top},${crop.bottom}|${reqW}x${reqH}|${fastWarp ? 1 : 0}`;
+      const transKey = pagesData[pageIdx] ? getPageTransformCacheKey(pagesData[pageIdx]) : '';
+      const key = `${pageIdx}|${transKey}|${quad.nw.x},${quad.nw.y},${quad.ne.x},${quad.ne.y},${quad.se.x},${quad.se.y},${quad.sw.x},${quad.sw.y}|${crop.left},${crop.right},${crop.top},${crop.bottom}|${reqW}x${reqH}|${fastWarp ? 1 : 0}`;
       if (cachedUnwarpedEditor.key === key && cachedUnwarpedEditor.canvas) {
         return cachedUnwarpedEditor.canvas;
       }
@@ -3725,8 +3794,9 @@
       if (hasPerspectiveQuad(p)) {
         const q = ensurePageQuad(p);
         const fastWarp = isInteracting && showGuides && (dragMode !== 'score-right');
+        const transKey = getPageTransformCacheKey(p);
         const cacheKey = showGuides
-          ? `${pageIdx}|${cachedTransformed.key}|${q.nw.x},${q.nw.y},${q.ne.x},${q.ne.y},${q.se.x},${q.se.y},${q.sw.x},${q.sw.y}|${Math.round(destPxW)}x${Math.round(destPxH)}|${fastWarp ? 1 : 0}`
+          ? `${pageIdx}|${transKey}|${q.nw.x},${q.nw.y},${q.ne.x},${q.ne.y},${q.se.x},${q.se.y},${q.sw.x},${q.sw.y}|${Math.round(destPxW)}x${Math.round(destPxH)}|${fastWarp ? 1 : 0}`
           : '';
         let unwarpedCanvas;
         if (cacheKey && cachedUnwarpedCrop.key === cacheKey && cachedUnwarpedCrop.canvas) {
@@ -4675,8 +4745,8 @@
 
         // If corner page number white-out mask is enabled, mask the top corners of the source page
         if (maskCorners) {
-          const maskW = p.origWidth * 0.112 * scaleS;
-          const maskH = p.origHeight * 0.055 * scaleS;
+          const maskW = p.origWidth * 0.145 * scaleS;
+          const maskH = p.origHeight * 0.082 * scaleS;
           const topY = targetCropBoxCenterY + scaleS * (p.origHeight / 2) - maskH;
           const leftX = targetCropBoxCenterX - scaleS * (p.origWidth / 2);
           const rightX = targetCropBoxCenterX + scaleS * (p.origWidth / 2) - maskW;

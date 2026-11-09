@@ -510,23 +510,20 @@
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
-      /* Separate numbered sections as distinct cards */
       padding: 10px;
       gap: 10px;
     }
 
     .control-section {
-      padding: 13px 14px;
-      border: 1px solid var(--border-light, #334155);
-      border-left: 3px solid var(--accent);
-      border-radius: 10px;
-      background: rgba(15, 23, 42, 0.45);
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+      padding: 12px 14px;
+      border: 1px solid #293548;
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.55);
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
       gap: 9px;
-      transition: background 0.15s;
+      transition: background 0.15s, border-color 0.15s;
     }
 
     .control-section.collapsed {
@@ -536,19 +533,22 @@
 
     /* Grouped sub-card inside a section (settings that share one "Apply to All" button) */
     .sub-card {
-      background: rgba(30, 41, 59, 0.55);
-      border: 1px solid var(--border-light, #334155);
-      border-radius: 8px;
+      background: rgba(30, 41, 59, 0.45);
+      border: 1px solid #293548;
+      border-radius: 7px;
       padding: 9px 10px;
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 7px;
     }
 
     .sub-card-title {
       font-size: 0.74rem;
       font-weight: 700;
-      color: #e2e8f0;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
     }
 
     .control-section.collapsed > :not(.section-title) {
@@ -1008,12 +1008,12 @@
 
     <div class="header-actions">
       <input type="file" id="pdfFileInput" accept="application/pdf" style="display:none" />
-      <button class="btn" id="btnToggleMobileUi" onclick="toggleMobileUiMode()" title="Switch between Simple Mobile UI and Full UI" style="border-color:#a855f7; color:#f3e8ff; background:rgba(168, 85, 247, 0.18);">📱 Simple UI</button>
+      <button class="btn" id="btnToggleMobileUi" onclick="toggleMobileUiMode()" title="Switch between Simple Mobile UI and Full UI">Simple UI</button>
       <button class="btn" onclick="document.getElementById('pdfFileInput').click()">📂 Open PDF</button>
-      <button class="btn" id="btnUnrollAllHeader" style="border-color:#0ea5e9; color:#38bdf8;" onclick="autoDewarpAllPages()" disabled>🌊 Auto-Unroll All</button>
-      <button class="btn btn-primary" id="btnAutoAll" onclick="autoDetectAllPages()" disabled>✨ Auto-Crop All Pages</button>
-      <button class="btn" id="btnPreviewPdfHeader" style="border-color:#10b981; color:#6ee7b7;" onclick="previewAdjustedPdfInNewTab()" disabled title="Open adjusted PDF in a new browser tab">👁️ Open PDF Tab</button>
-      <button class="btn btn-success" id="btnExportPdf" onclick="exportAdjustedPdf()" disabled>💾 Save As PDF</button>
+      <button class="btn" id="btnUnrollAllHeader" onclick="autoDewarpAllPages()" disabled>Auto-Unroll All</button>
+      <button class="btn" id="btnAutoAll" onclick="autoDetectAllPages()" disabled>Auto-Crop All Pages</button>
+      <button class="btn" id="btnPreviewPdfHeader" onclick="previewAdjustedPdfInNewTab()" disabled title="Open adjusted PDF in a new browser tab">Open PDF Tab</button>
+      <button class="btn btn-primary" id="btnExportPdf" onclick="exportAdjustedPdf()" disabled>💾 Save As PDF</button>
     </div>
   </header>
 
@@ -1033,7 +1033,6 @@
       <!-- Dropzone when no file loaded -->
       <div class="dropzone-overlay" id="dropzoneOverlay">
         <div class="dropzone-box" id="dropzoneBox" onclick="document.getElementById('pdfFileInput').click()">
-          <div class="dropzone-icon">📄🎼</div>
           <div class="dropzone-title">Drop a Scanned Sheet Music PDF Here or Click to Open</div>
           <div class="dropzone-desc">
             • Semi-automatic margin detection & interactive drag-handle crop adjustment<br/>
@@ -1041,7 +1040,7 @@
             • Preserves original PDF streams losslessly (vector / JBIG2 / CCITT / JPEG), or exports crisp 1-bit monochrome / grayscale on Letter / A4
           </div>
           <button class="btn btn-primary" style="margin-top:8px; padding:10px 20px; font-size:0.9rem;" onclick="event.stopPropagation(); document.getElementById('pdfFileInput').click();">
-            Select PDF File
+            📂 Open PDF
           </button>
         </div>
       </div>
@@ -1054,7 +1053,7 @@
           <button class="btn btn-sm" id="btnNextPage" onclick="changePage(1)" disabled>Next ▶</button>
         </div>
         <div class="stage-hint">
-          <span>💡 <b>Drag 4 Corners ●</b>: Free perspective unwrap</span>
+          <span><b>Drag 4 Corners ●</b>: Free perspective unwrap</span>
           <span>•</span>
           <span><b>Drag 4 Midpoints ■ / Edges</b>: Move whole side</span>
           <span>•</span>
@@ -1068,11 +1067,11 @@
         <div class="pane" id="editorPane">
           <div class="pane-header-row" style="display:flex; align-items:center; gap:6px; flex-shrink:0; align-self:flex-start; max-width:100%; flex-wrap:wrap;">
             <div class="pane-title">
-              <span>✂️ Source Scan & Crop Box</span>
+              <span>Source Scan & Crop Box</span>
               <span id="cropSizeReadout" style="color:#93c5fd;"></span>
             </div>
-            <button class="btn btn-sm" id="btnResetQuadCorners" onclick="resetQuadToRectCurrentPage()" style="padding:3px 9px; font-size:0.72rem; border-color:#38bdf8; color:#bae6fd; background:rgba(14, 165, 233, 0.16); pointer-events:auto;" title="Snap all 4 corners back to a straight rectangle">
-              ⬜ Reset 4 Corners
+            <button class="btn btn-sm" id="btnResetQuadCorners" onclick="resetQuadToRectCurrentPage()" style="padding:3px 9px; font-size:0.72rem; pointer-events:auto;" title="Snap all 4 corners back to a straight rectangle">
+              Reset 4 Corners
             </button>
           </div>
           <div class="canvas-container">
@@ -1083,8 +1082,8 @@
         <!-- Right Pane: Final Output Preview -->
         <div class="pane" id="previewPane">
           <div class="pane-title">
-            <span>📐 Target Paper Preview</span>
-            <span id="previewSpecReadout" style="color:#6ee7b7;">Letter (215.9 × 279.4 mm)</span>
+            <span>Target Paper Preview</span>
+            <span id="previewSpecReadout" style="color:#93c5fd;">Letter (215.9 × 279.4 mm)</span>
           </div>
           <div class="canvas-container">
             <canvas id="previewCanvas"></canvas>
@@ -1101,7 +1100,7 @@
 
       <!-- Mobile Full UI Accordion Controls Bar -->
       <div class="mobile-inspector-bar">
-        <span style="font-size:0.75rem; font-weight:700; color:#cbd5e1;">🎛️ Detailed Controls (Tap section to open)</span>
+        <span style="font-size:0.75rem; font-weight:700; color:#cbd5e1;">Detailed Controls (Tap section to open)</span>
         <button class="btn btn-sm" id="btnToggleAllSections" onclick="toggleAllInspectorSections()" style="padding:4px 8px; font-size:0.7rem;">Expand All</button>
       </div>
 
@@ -1143,7 +1142,7 @@
         </div>
 
         <button class="btn btn-sm" onclick="unifyCropSizeAcrossPages()" title="Unifies the crop width & height across all pages and auto-centers each box on the detected music score">
-          📏 Unify Crop Width & Height Across All Pages
+          Unify Crop Width & Height Across All Pages
         </button>
       </div>
 
@@ -1186,17 +1185,17 @@
         </div>
 
         <!-- Non-Uniform Staff-Line Guided Unroll (Dewarp) Card -->
-        <div style="background: rgba(14, 165, 233, 0.09); border: 1px solid rgba(56, 189, 248, 0.42); border-radius: 8px; padding: 9px 10px; margin-bottom: 4px; display: flex; flex-direction: column; gap: 6px;">
-          <div class="control-row">
-            <span class="control-label" style="color:#38bdf8; font-weight:700;">🌊 Non-Uniform Staff Unroll</span>
-            <span id="dewarpStatusBadge" style="font-size:0.68rem; background:rgba(15,23,42,0.8); color:#94a3b8; padding:2px 6px; border-radius:4px; border:1px solid #334155;">Off</span>
+        <div class="sub-card">
+          <div class="sub-card-title">
+            <span>Non-Uniform Staff Unroll</span>
+            <span id="dewarpStatusBadge" style="font-size:0.68rem; font-weight:600; background:rgba(15,23,42,0.8); color:#94a3b8; padding:2px 6px; border-radius:4px; border:1px solid #334155;">Off</span>
           </div>
-          <div class="section-subtitle" style="font-size:0.71rem; color:#cbd5e1; line-height:1.35;">
-            • Tracks all 5-line staves across the page and flattens non-uniform book-spine curvature into straight horizontal lines.
+          <div class="section-subtitle">
+            Tracks all 5-line staves across the page and flattens book-spine curvature into straight horizontal lines.
           </div>
           <div class="grid-2" style="margin-top:2px;">
-            <button class="btn btn-sm btn-primary" style="background:#0284c7; border-color:#38bdf8;" onclick="autoDewarpCurrentPage()">🌊 Auto-Unroll Page</button>
-            <button class="btn btn-sm btn-primary" style="background:#0369a1; border-color:#38bdf8;" onclick="autoDewarpAllPages()">🌊 Auto-Unroll All</button>
+            <button class="btn btn-sm btn-primary" onclick="autoDewarpCurrentPage()">Auto-Unroll Page</button>
+            <button class="btn btn-sm btn-primary" onclick="autoDewarpAllPages()">Auto-Unroll All</button>
           </div>
           <label class="checkbox-row" style="margin-top:2px;">
             <input type="checkbox" id="chkDewarpEnabled" onchange="onToggleDewarpEnabled(this.checked)" />
@@ -1207,16 +1206,16 @@
             <span>Show Detected Staff Curves & Ruler Overlay</span>
           </label>
           <div class="control-row" style="margin-top:2px;">
-            <span class="control-label" style="font-size:0.73rem;">Vertical Straightening</span>
-            <span class="control-value" id="valDewarpStrength" style="color:#38bdf8;">100%</span>
+            <span class="control-label">Vertical Straightening</span>
+            <span class="control-value" id="valDewarpStrength">100%</span>
           </div>
           <div class="range-tick-wrap">
             <input type="range" id="rngDewarpStrength" min="0" max="125" step="5" value="100" oninput="onDewarpSliderChange()" />
             <div class="range-ticks"><span class="range-tick" style="--pos:0.8;" title="100% = exact correction of the detected staff curvature (above = over-correction)">100%</span></div>
           </div>
           <div class="control-row">
-            <span class="control-label" style="font-size:0.73rem;">Horizontal Spine Unroll</span>
-            <span class="control-value" id="valHorizUnroll" style="color:#38bdf8;">60%</span>
+            <span class="control-label">Horizontal Spine Unroll</span>
+            <span class="control-value" id="valHorizUnroll">60%</span>
           </div>
           <div class="range-tick-wrap">
             <input type="range" id="rngHorizUnroll" min="0" max="150" step="10" value="60" oninput="onDewarpSliderChange()" />
@@ -1232,7 +1231,7 @@
 
         <!-- Background Cleanup + Contrast card (its Apply button copies ONLY these two settings) -->
         <div class="sub-card">
-          <div class="sub-card-title">🧹 Background & Contrast</div>
+          <div class="sub-card-title">Background & Contrast</div>
 
           <div class="control-row">
             <span class="control-label" title="Turns light gray background / paper tint / bleed-through into pure white. Drag LEFT to remove more.">Background Cleanup (White Point)</span>
@@ -1253,12 +1252,12 @@
           </div>
           <input type="range" id="rngContrast" min="100" max="200" step="5" value="100" oninput="onFilterChange()" />
 
-          <button class="btn btn-sm" onclick="applyFiltersToAllPages('tone')" title="Copies ONLY Background Cleanup & Contrast Boost from this page to every page">Apply These 2 to All Pages</button>
+          <button class="btn btn-sm" onclick="applyFiltersToAllPages('tone')" title="Copies ONLY Background Cleanup & Contrast Boost from this page to every page">Apply to All Pages</button>
         </div>
 
         <!-- 1-Bit Binarize card (its Apply button copies ONLY the 1-bit settings) -->
         <div class="sub-card">
-          <div class="sub-card-title">⬛ 1-Bit Black & White</div>
+          <div class="sub-card-title">1-Bit Black & White</div>
 
           <label class="checkbox-row">
             <input type="checkbox" id="chkBinarize" onchange="onFilterChange()" />
@@ -1268,12 +1267,12 @@
           <div id="wrapLinePreserve" style="opacity:0.38; pointer-events:none; transition:opacity 0.15s; display:flex; flex-direction:column; gap:4px;">
             <div class="control-row" style="margin-top:2px;">
               <span class="control-label" title="Prevents thin or light gray staff lines from disappearing when converting or exporting to 1-Bit Monochrome">1-Bit Staff Line Rescue</span>
-              <span class="control-value" id="valLinePreserve" style="color:#38bdf8;">80%</span>
+              <span class="control-value" id="valLinePreserve">80%</span>
             </div>
             <input type="range" id="rngLinePreserve" min="0" max="100" step="5" value="80" disabled oninput="onFilterChange()" />
           </div>
 
-          <button class="btn btn-sm" onclick="applyFiltersToAllPages('binarize')" title="Copies ONLY the 1-Bit Binarize on/off and Staff Line Rescue from this page to every page">Apply 1-Bit Settings to All Pages</button>
+          <button class="btn btn-sm" onclick="applyFiltersToAllPages('binarize')" title="Copies ONLY the 1-Bit Binarize on/off and Staff Line Rescue from this page to every page">Apply to All Pages</button>
         </div>
       </div>
 
@@ -1302,7 +1301,7 @@
           </select>
         </div>
 
-        <div class="section-subtitle" id="scaleModeDesc" style="color:#93c5fd;">
+        <div class="section-subtitle" id="scaleModeDesc">
           • Scales each page’s cropped score individually to fill the target paper margins.
         </div>
 
@@ -1364,20 +1363,20 @@
           <span class="control-label">Quality & Compression Mode</span>
         </div>
         <select id="selExportMode" style="width:100%;" onchange="onExportModeChange()">
-          <option value="native_lossless" selected>⚡ Native Lossless (Preserve Original PDF Streams & Quality)</option>
-          <option value="mono_600">🎯 600 DPI 1-Bit Monochrome (Apply Image Filters)</option>
-          <option value="mono_300">📄 300 DPI 1-Bit Monochrome (Apply Image Filters)</option>
-          <option value="jpeg_300">🖼️ 300 DPI Grayscale JPEG (For Halftones / Grayscale)</option>
+          <option value="native_lossless" selected>Native Lossless (Preserve Original PDF Streams & Quality)</option>
+          <option value="mono_600">600 DPI 1-Bit Monochrome (Apply Image Filters)</option>
+          <option value="mono_300">300 DPI 1-Bit Monochrome (Apply Image Filters)</option>
+          <option value="jpeg_300">300 DPI Grayscale JPEG (For Halftones / Grayscale)</option>
         </select>
-        <div class="section-subtitle" id="exportModeDesc" style="color:#6ee7b7;">
+        <div class="section-subtitle" id="exportModeDesc">
           • Preserves original PDF streams (vector notation, JBIG2, CCITT, JPEG, etc.) without re-encoding. Zero quality loss & retains original file size!
         </div>
 
-        <button class="btn" id="btnPreviewPdfBottom" style="width:100%; padding:10px; margin-top:6px; font-size:0.86rem; border-color:#10b981; color:#6ee7b7;" onclick="previewAdjustedPdfInNewTab()" disabled>
-          👁️ Open Adjusted PDF in New Tab
+        <button class="btn" id="btnPreviewPdfBottom" style="width:100%; padding:9px; margin-top:4px; font-size:0.84rem;" onclick="previewAdjustedPdfInNewTab()" disabled>
+          Open Adjusted PDF in New Tab
         </button>
 
-        <button class="btn btn-success" id="btnExportBottom" style="width:100%; padding:11px; margin-top:6px; font-size:0.9rem;" onclick="exportAdjustedPdf()" disabled>
+        <button class="btn btn-primary" id="btnExportBottom" style="width:100%; padding:10px; margin-top:4px; font-size:0.86rem;" onclick="exportAdjustedPdf()" disabled>
           💾 Save As PDF...
         </button>
       </div>
@@ -1652,7 +1651,7 @@
       document.body.classList.toggle('mobile-mode', isMobileUiMode);
       const btn = document.getElementById('btnToggleMobileUi');
       if (btn) {
-        btn.textContent = isMobileUiMode ? '🎛️ Full UI' : '📱 Simple UI';
+        btn.textContent = isMobileUiMode ? 'Full UI' : 'Simple UI';
       }
       if (isMobileUiMode) {
         setViewMode('split');

@@ -510,11 +510,18 @@
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
+      /* Separate numbered sections as distinct cards */
+      padding: 10px;
+      gap: 10px;
     }
 
     .control-section {
-      padding: 13px 16px;
-      border-bottom: 1px solid var(--border);
+      padding: 13px 14px;
+      border: 1px solid var(--border-light, #334155);
+      border-left: 3px solid var(--accent);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.45);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
       display: flex;
       flex-direction: column;
       flex-shrink: 0;
@@ -523,8 +530,25 @@
     }
 
     .control-section.collapsed {
-      padding: 10px 16px;
+      padding: 10px 14px;
       gap: 0;
+    }
+
+    /* Grouped sub-card inside a section (settings that share one "Apply to All" button) */
+    .sub-card {
+      background: rgba(30, 41, 59, 0.55);
+      border: 1px solid var(--border-light, #334155);
+      border-radius: 8px;
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .sub-card-title {
+      font-size: 0.74rem;
+      font-weight: 700;
+      color: #e2e8f0;
     }
 
     .control-section.collapsed > :not(.section-title) {
@@ -532,15 +556,21 @@
     }
 
     .section-title {
-      font-size: 0.81rem;
+      font-size: 0.82rem;
       font-weight: 700;
-      color: #e2e8f0;
+      color: #f8fafc;
       display: flex;
       align-items: center;
       justify-content: space-between;
       cursor: pointer;
       user-select: none;
+      padding: 2px 0 6px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+    }
+
+    .control-section.collapsed .section-title {
       padding: 2px 0;
+      border-bottom: none;
     }
 
     .section-title:hover {
@@ -633,6 +663,51 @@
       width: 100%;
       accent-color: var(--accent);
       cursor: pointer;
+    }
+
+    /* Slider with reference tick marks (e.g. 100% marker when max > 100%) */
+    .range-tick-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .range-ticks {
+      position: relative;
+      height: 14px;
+      margin-top: -1px;
+    }
+
+    .range-tick {
+      position: absolute;
+      top: 0;
+      /* Native thumb is ~16px wide: map value ratio onto the thumb-center travel range */
+      left: calc(8px + (100% - 16px) * var(--pos));
+      transform: translateX(-50%);
+      padding-top: 5px;
+      font-size: 0.6rem;
+      line-height: 1;
+      color: #94a3b8;
+      white-space: nowrap;
+      cursor: default;
+    }
+
+    .range-tick::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: 1px;
+      height: 4px;
+      background: #94a3b8;
+    }
+
+    .range-end-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.62rem;
+      color: #94a3b8;
+      margin-top: 1px;
     }
 
     select, input[type="number"], input[type="text"] {
@@ -1135,12 +1210,18 @@
             <span class="control-label" style="font-size:0.73rem;">Vertical Straightening</span>
             <span class="control-value" id="valDewarpStrength" style="color:#38bdf8;">100%</span>
           </div>
-          <input type="range" id="rngDewarpStrength" min="0" max="125" step="5" value="100" oninput="onDewarpSliderChange()" />
+          <div class="range-tick-wrap">
+            <input type="range" id="rngDewarpStrength" min="0" max="125" step="5" value="100" oninput="onDewarpSliderChange()" />
+            <div class="range-ticks"><span class="range-tick" style="--pos:0.8;" title="100% = exact correction of the detected staff curvature (above = over-correction)">100%</span></div>
+          </div>
           <div class="control-row">
             <span class="control-label" style="font-size:0.73rem;">Horizontal Spine Unroll</span>
             <span class="control-value" id="valHorizUnroll" style="color:#38bdf8;">60%</span>
           </div>
-          <input type="range" id="rngHorizUnroll" min="0" max="150" step="10" value="60" oninput="onDewarpSliderChange()" />
+          <div class="range-tick-wrap">
+            <input type="range" id="rngHorizUnroll" min="0" max="150" step="10" value="60" oninput="onDewarpSliderChange()" />
+            <div class="range-ticks"><span class="range-tick" style="--pos:0.6667;" title="100% = full spine stretch compensation (above = over-stretch)">100%</span></div>
+          </div>
         </div>
 
         <div class="control-row">
@@ -1149,32 +1230,51 @@
         </div>
         <input type="range" id="rngSkew" min="-4" max="4" step="0.05" value="0" oninput="onSkewSliderChange(this.value)" />
 
-        <div class="control-row" style="margin-top:4px;">
-          <span class="control-label">White Point (Background Cleanup)</span>
-          <span class="control-value" id="valWhiteLevel">255 (Off)</span>
-        </div>
-        <input type="range" id="rngWhiteLevel" min="170" max="255" step="1" value="255" oninput="onFilterChange()" />
+        <!-- Background Cleanup + Contrast card (its Apply button copies ONLY these two settings) -->
+        <div class="sub-card">
+          <div class="sub-card-title">🧹 Background & Contrast</div>
 
-        <div class="control-row">
-          <span class="control-label">Contrast Boost</span>
-          <span class="control-value" id="valContrast">100%</span>
-        </div>
-        <input type="range" id="rngContrast" min="100" max="200" step="5" value="100" oninput="onFilterChange()" />
-
-        <label class="checkbox-row">
-          <input type="checkbox" id="chkBinarize" onchange="onFilterChange()" />
-          <span>Strict 1-Bit Binarize (Pure Black & White)</span>
-        </label>
-
-        <div id="wrapLinePreserve" style="opacity:0.38; pointer-events:none; transition:opacity 0.15s; display:flex; flex-direction:column; gap:4px;">
-          <div class="control-row" style="margin-top:2px;">
-            <span class="control-label" title="Prevents thin or light gray staff lines from disappearing when converting or exporting to 1-Bit Monochrome">1-Bit Staff Line Rescue</span>
-            <span class="control-value" id="valLinePreserve" style="color:#38bdf8;">80%</span>
+          <div class="control-row">
+            <span class="control-label" title="Turns light gray background / paper tint / bleed-through into pure white. Drag LEFT to remove more.">Background Cleanup (White Point)</span>
+            <span class="control-value" id="valWhiteLevel">Off</span>
           </div>
-          <input type="range" id="rngLinePreserve" min="0" max="100" step="5" value="80" disabled oninput="onFilterChange()" />
+          <div class="range-tick-wrap">
+            <!-- dir="rtl": the filled part of the bar (right → thumb) shows how much gray is being removed -->
+            <input type="range" id="rngWhiteLevel" dir="rtl" min="0" max="85" step="1" value="0" oninput="onFilterChange()" />
+            <div class="range-end-labels">
+              <span>◀ Remove more gray</span>
+              <span>Off ▶</span>
+            </div>
+          </div>
+
+          <div class="control-row">
+            <span class="control-label">Contrast Boost</span>
+            <span class="control-value" id="valContrast">100%</span>
+          </div>
+          <input type="range" id="rngContrast" min="100" max="200" step="5" value="100" oninput="onFilterChange()" />
+
+          <button class="btn btn-sm" onclick="applyFiltersToAllPages('tone')" title="Copies ONLY Background Cleanup & Contrast Boost from this page to every page">Apply These 2 to All Pages</button>
         </div>
 
-        <button class="btn btn-sm" onclick="applyFiltersToAllPages()">Apply Image Cleanup to All Pages</button>
+        <!-- 1-Bit Binarize card (its Apply button copies ONLY the 1-bit settings) -->
+        <div class="sub-card">
+          <div class="sub-card-title">⬛ 1-Bit Black & White</div>
+
+          <label class="checkbox-row">
+            <input type="checkbox" id="chkBinarize" onchange="onFilterChange()" />
+            <span>Strict 1-Bit Binarize (Pure Black & White)</span>
+          </label>
+
+          <div id="wrapLinePreserve" style="opacity:0.38; pointer-events:none; transition:opacity 0.15s; display:flex; flex-direction:column; gap:4px;">
+            <div class="control-row" style="margin-top:2px;">
+              <span class="control-label" title="Prevents thin or light gray staff lines from disappearing when converting or exporting to 1-Bit Monochrome">1-Bit Staff Line Rescue</span>
+              <span class="control-value" id="valLinePreserve" style="color:#38bdf8;">80%</span>
+            </div>
+            <input type="range" id="rngLinePreserve" min="0" max="100" step="5" value="80" disabled oninput="onFilterChange()" />
+          </div>
+
+          <button class="btn btn-sm" onclick="applyFiltersToAllPages('binarize')" title="Copies ONLY the 1-Bit Binarize on/off and Staff Line Rescue from this page to every page">Apply 1-Bit Settings to All Pages</button>
+        </div>
       </div>
 
       <!-- 4. Output Paper Size & Scaling Mode -->
@@ -1249,7 +1349,7 @@
       </div>
 
       <!-- 5. Export Settings -->
-      <div class="control-section" id="secExport" style="border-bottom:none;">
+      <div class="control-section" id="secExport">
         <div class="section-title" onclick="toggleControlSection(this.parentElement)">
           <span>5. Save As / Export Settings</span>
           <span class="sec-chevron">▾</span>
@@ -2592,8 +2692,23 @@
     // ============================================================================
     // 5. Smart Semi-Automatic Margin Detection (Anchored to Score Right Edge) & Auto-Deskew
     // ============================================================================
-    function analyzePageInkBounds(pageObj, confineToCrop = false) {
-      const canvas = createTransformedCanvas(pageObj);
+    function analyzePageInkBounds(pageObj, confineToCrop = false, overrideCanvas = null) {
+      let canvas = overrideCanvas;
+      if (!canvas) {
+        const baseTrans = createTransformedCanvas(pageObj);
+        if (confineToCrop && hasPerspectiveQuad(pageObj)) {
+          canvas = createPerspectiveUnwarpedFullPageCanvas(
+            baseTrans,
+            ensurePageQuad(pageObj),
+            pageObj.crop,
+            baseTrans.width,
+            baseTrans.height,
+            false
+          );
+        } else {
+          canvas = baseTrans;
+        }
+      }
       const w = canvas.width;
       const h = canvas.height;
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
@@ -2602,7 +2717,7 @@
       const sensitivity = parseInt(document.getElementById('rngSensitivity').value, 10) || 25;
       const edgeSkipX = Math.round(w * 0.008);
       const edgeSkipY = Math.round(h * 0.008);
-      const resScale = Math.max(1.0, h / 1200);
+      const resScale = Math.max(0.45, h / 1200);
 
       function isCornerZone(x, y) {
         const nx = x / w;
@@ -2637,31 +2752,45 @@
         }
       }
 
-      const R = Math.max(6, Math.round(6 * resScale));
-      const minClusterPixels = Math.max(5, Math.round((sensitivity / 2.6) * resScale * resScale));
-      const minCornerPixels = Math.max(12, Math.round(minClusterPixels * 1.6));
+      const R = Math.max(3, Math.round(6 * resScale));
+      const minClusterPixels = Math.max(3, Math.round((sensitivity / 2.6) * resScale * resScale));
+      const minCornerPixels = Math.max(8, Math.round(minClusterPixels * 1.6));
 
-      // Vertical middle band [7.5% .. 91.5%] strictly contains the music staves & barlines
-      const staffBandYMin = Math.round(h * 0.075);
-      const staffBandYMax = Math.round(h * 0.915);
+      const insetPx = Math.max(2, Math.round(w * 0.003));
+      const maxSearchRightPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.right === 'number')
+        ? Math.min(w - edgeSkipX - 1, Math.round((1 - pageObj.crop.right) * w) - insetPx)
+        : (w - edgeSkipX - 1);
+      const minSearchLeftPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.left === 'number')
+        ? Math.max(edgeSkipX, Math.round(pageObj.crop.left * w) + insetPx)
+        : edgeSkipX;
+      const minSearchTopPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.top === 'number')
+        ? Math.max(edgeSkipY, Math.round(pageObj.crop.top * h) + insetPx)
+        : edgeSkipY;
+      const maxSearchBottomPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.bottom === 'number')
+        ? Math.min(h - edgeSkipY - 1, Math.round((1 - pageObj.crop.bottom) * h) - insetPx)
+        : (h - edgeSkipY - 1);
 
-      let scoreLeftPx = w - edgeSkipX;
-      let scoreRightPx = edgeSkipX;
+      // Vertical middle band [7.5% .. 91.5%] strictly contains the music staves & barlines (confined to crop when active)
+      const staffBandYMin = Math.max(Math.round(h * 0.075), minSearchTopPx);
+      const staffBandYMax = Math.min(Math.round(h * 0.915), maxSearchBottomPx);
 
-      let noCornerTopPx = h - edgeSkipY;
-      let noCornerBottomPx = edgeSkipY;
-      let noCornerLeftPx = w - edgeSkipX;
-      let noCornerRightPx = edgeSkipX;
+      let scoreLeftPx = maxSearchRightPx;
+      let scoreRightPx = minSearchLeftPx;
 
-      let fullTopPx = h - edgeSkipY;
-      let fullBottomPx = edgeSkipY;
-      let cornerLeftPx = w - edgeSkipX;
-      let cornerRightPx = edgeSkipX;
+      let noCornerTopPx = maxSearchBottomPx;
+      let noCornerBottomPx = minSearchTopPx;
+      let noCornerLeftPx = maxSearchRightPx;
+      let noCornerRightPx = minSearchLeftPx;
+
+      let fullTopPx = maxSearchBottomPx;
+      let fullBottomPx = minSearchTopPx;
+      let cornerLeftPx = maxSearchRightPx;
+      let cornerRightPx = minSearchLeftPx;
 
       let foundAny = false;
       const staffColInk = new Int32Array(w);
 
-      for (let y = edgeSkipY; y < h - edgeSkipY; y++) {
+      for (let y = minSearchTopPx; y <= maxSearchBottomPx; y++) {
         const inkRowOffset = y * w;
         const y0 = Math.max(edgeSkipY, y - R);
         const y1 = Math.min(h - edgeSkipY - 1, y + R) + 1;
@@ -2669,7 +2798,7 @@
         const satY1 = y1 * satW;
         const inStaffBand = (y >= staffBandYMin && y <= staffBandYMax);
 
-        for (let x = edgeSkipX; x < w - edgeSkipX; x++) {
+        for (let x = minSearchLeftPx; x <= maxSearchRightPx; x++) {
           if (isInk[inkRowOffset + x] === 0) continue;
 
           const x0 = Math.max(edgeSkipX, x - R);
@@ -2702,12 +2831,9 @@
       }
 
       // Robust Staff Right/Left Barline detection:
-      const minBarlineInk = Math.max(8, Math.round((sensitivity / 3.2) * resScale));
+      const minBarlineInk = Math.max(4, Math.round((sensitivity / 3.2) * resScale));
       let foundStaffRight = false;
-      const maxSearchRightPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.right === 'number' && pageObj.crop.right > 0)
-        ? Math.min(w - edgeSkipX - 1, Math.round((1 - pageObj.crop.right) * w))
-        : (w - edgeSkipX - 1);
-      for (let x = maxSearchRightPx; x >= Math.round(w * 0.35); x--) {
+      for (let x = maxSearchRightPx; x >= Math.max(minSearchLeftPx, Math.round(w * 0.35)); x--) {
         const colDensity = staffColInk[x] + (staffColInk[x - 1] || 0) + (staffColInk[x + 1] || 0);
         if (colDensity >= minBarlineInk) {
           scoreRightPx = x;
@@ -2717,10 +2843,7 @@
       }
 
       let foundStaffLeft = false;
-      const minSearchLeftPx = (confineToCrop && pageObj.crop && typeof pageObj.crop.left === 'number' && pageObj.crop.left > 0)
-        ? Math.max(edgeSkipX, Math.round(pageObj.crop.left * w))
-        : edgeSkipX;
-      for (let x = minSearchLeftPx; x <= Math.min(scoreRightPx - 50, Math.round(w * 0.65)); x++) {
+      for (let x = minSearchLeftPx; x <= Math.min(scoreRightPx - Math.round(25 * resScale), Math.round(w * 0.65)); x++) {
         const colDensity = staffColInk[x] + (staffColInk[x - 1] || 0) + (staffColInk[x + 1] || 0);
         if (colDensity >= minBarlineInk) {
           scoreLeftPx = x;
@@ -2765,7 +2888,7 @@
       };
 
       // Confine scoreRight within user's adjusted crop boundaries if confineToCrop is active
-      if (confineToCrop && pageObj.crop && typeof pageObj.crop.right === 'number' && pageObj.crop.right > 0) {
+      if (confineToCrop && pageObj.crop && typeof pageObj.crop.right === 'number') {
         bounds.scoreRight = round4(clamp(bounds.scoreRight, (pageObj.crop.left || 0) + 0.02, 1 - pageObj.crop.right));
       }
 
@@ -2773,6 +2896,27 @@
       pageObj.scoreRight = bounds.scoreRight;
       pageObj.rawBounds = bounds;
       return bounds;
+    }
+
+    // Unified helper: automatically re-detects the orange Score Right Anchor (p.scoreRight)
+    // within the current crop & 4-corner perspective unwrap whenever page geometry changes.
+    function autoReDetectScoreRight(pageObj, options = {}) {
+      if (!pageObj) return;
+      const { fastCanvas = null, showToastMsg = false, redrawThumb = false } = options;
+      pageObj.rawBounds = null;
+      analyzePageInkBounds(pageObj, true, fastCanvas);
+      const maxSr = round4(1 - pageObj.crop.right);
+      const minSr = round4(pageObj.crop.left + 0.02);
+      pageObj.scoreRight = round4(clamp(pageObj.scoreRight, minSr, maxSr));
+      if (pageObj === pagesData[currentPageIdx]) {
+        syncInspectorFromPage();
+      }
+      if (redrawThumb && typeof pageObj.pageIndex === 'number') {
+        drawThumbnail(pageObj.pageIndex);
+      }
+      if (showToastMsg) {
+        showToast(`⚓ Right score end auto-detected (${(pageObj.scoreRight * 100).toFixed(1)}%).`);
+      }
     }
 
     // Applies auto-crop tightly to each page's own detected score & corner bounds + Auto-Crop Padding,
@@ -3023,15 +3167,8 @@
       }
       p.dewarp.enabled = checked;
       cachedTransformed.pageIdx = -1;
-      p.rawBounds = null;
-      analyzePageInkBounds(p, true);
-      const maxSr = round4(1 - p.crop.right);
-      const minSr = round4(p.crop.left + 0.02);
-      p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
-      syncInspectorFromPage();
-      drawThumbnail(currentPageIdx);
+      autoReDetectScoreRight(p, { showToastMsg: true, redrawThumb: true });
       renderActiveView();
-      showToast(`⚓ Right score end auto-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
     }
 
     function onToggleStaffOverlay(checked) {
@@ -3064,15 +3201,8 @@
       clearTimeout(window._dewarpTimer);
       window._dewarpTimer = setTimeout(() => {
         isInteracting = false;
-        p.rawBounds = null;
-        analyzePageInkBounds(p, true);
-        const maxSr = round4(1 - p.crop.right);
-        const minSr = round4(p.crop.left + 0.02);
-        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
-        syncInspectorFromPage();
-        drawThumbnail(currentPageIdx);
+        autoReDetectScoreRight(p, { showToastMsg: true, redrawThumb: true });
         renderActiveView();
-        showToast(`⚓ Right score end re-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
       }, 280);
     }
 
@@ -3429,6 +3559,7 @@
       let maxRightFromScoreRightPt = 0;
       let refScoreWidthPt = 100;
       let uniformMmPerPt = 1;
+      let fitAnchorOffsetMm = null;
 
       if (pagesData.length > 0) {
         maxLeftFromScoreRightPt = 0;
@@ -3449,6 +3580,29 @@
 
         scoreWidths.sort((a, b) => a - b);
         refScoreWidthPt = scoreWidths[Math.floor(scoreWidths.length / 2)];
+
+        // Shared horizontal position (mm from the left margin) of the orange anchor line in "fit" mode.
+        // Each page keeps its OWN natural fit scale (independent of where the orange line is); the anchor X is the
+        // median of every page's natural anchor offset so pages only need to shift (never rescale) to line up.
+        const fitOffsets = [];
+        for (let i = 0; i < pagesData.length; i++) {
+          const p = pagesData[i];
+          const isOddP = (i % 2 === 0);
+          const effL = mLeft + (isOddP ? gutterMm : 0);
+          const effR = mRight + (!isOddP ? gutterMm : 0);
+          const aW = Math.max(10, paper.widthMm - effL - effR);
+          const aH = Math.max(10, paper.heightMm - mTop - mBottom);
+          const cW = Math.max(10, p.origWidth * (1 - p.crop.left - p.crop.right));
+          const cH = Math.max(10, p.origHeight * (1 - p.crop.top - p.crop.bottom));
+          const s = Math.min(aW / cW, aH / cH);
+          const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+          const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
+          const drawW = cW * s;
+          // natural (centered) placement offset of the anchor relative to the left margin
+          fitOffsets.push((aW - drawW) / 2 + (sr - p.crop.left) * p.origWidth * s);
+        }
+        fitOffsets.sort((a, b) => a - b);
+        fitAnchorOffsetMm = fitOffsets[Math.floor(fitOffsets.length / 2)];
 
         const totalEnvelopePtW = Math.max(10, maxLeftFromScoreRightPt + maxRightFromScoreRightPt);
         const pageRatios = [];
@@ -3481,7 +3635,8 @@
         uniformMmPerPt,
         maxLeftFromScoreRightPt,
         maxRightFromScoreRightPt,
-        refScoreWidthPt
+        refScoreWidthPt,
+        fitAnchorOffsetMm
       };
     }
 
@@ -3490,7 +3645,7 @@
     function computePageTargetPlacement(pageIdx, spec) {
       const {
         paper, scaleMode, mTop, mBottom, mLeft, mRight, gutterMm,
-        uniformMmPerPt, maxLeftFromScoreRightPt, maxRightFromScoreRightPt
+        uniformMmPerPt, maxLeftFromScoreRightPt, maxRightFromScoreRightPt, fitAnchorOffsetMm
       } = spec;
 
       const p = pagesData[pageIdx];
@@ -3505,29 +3660,38 @@
       const cropPtH = Math.max(10, p.origHeight * (1 - p.crop.top - p.crop.bottom));
       const totalEnvelopePtW = Math.max(10, maxLeftFromScoreRightPt + maxRightFromScoreRightPt);
 
-      const scaleMmPerPt = (scaleMode === 'uniform')
-        ? uniformMmPerPt
-        : Math.min(availWMm / cropPtW, availHMm / cropPtH);
+      const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
+      const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
+      const leftOfAnchorPt = Math.max(0, (sr - p.crop.left) * p.origWidth);
+      const rightOfAnchorPt = Math.max(0, ((1 - p.crop.right) - sr) * p.origWidth);
+
+      let scaleMmPerPt;
+      let destXMm;
+      if (scaleMode === 'uniform') {
+        scaleMmPerPt = uniformMmPerPt;
+        // Align the orange Score Right Anchor line across pages using the document-wide envelope
+        const envLeftMm = maxLeftFromScoreRightPt * scaleMmPerPt;
+        const envRightMm = maxRightFromScoreRightPt * scaleMmPerPt;
+        const totalEnvMm = envLeftMm + envRightMm;
+        const idealScoreRightXMm = effLeftMm + (availWMm - totalEnvMm) / 2 + envLeftMm;
+        destXMm = idealScoreRightXMm - leftOfAnchorPt * scaleMmPerPt;
+      } else {
+        // "Fit" mode: each page keeps its OWN natural fit scale (the orange line NEVER changes the scale).
+        // Pages are only shifted horizontally so the orange anchor line lands on the SAME shared X on every page.
+        // A page may slide slightly into the side margin if needed, but is always kept on the paper.
+        scaleMmPerPt = Math.min(availWMm / cropPtW, availHMm / cropPtH);
+        const drawW = cropPtW * scaleMmPerPt;
+        const leftMm = leftOfAnchorPt * scaleMmPerPt;
+        const anchorOffsetMm = (typeof fitAnchorOffsetMm === 'number')
+          ? fitAnchorOffsetMm
+          : (availWMm - drawW) / 2 + leftMm;
+        destXMm = effLeftMm + anchorOffsetMm - leftMm;
+        destXMm = clamp(destXMm, 0, Math.max(0, paper.widthMm - drawW));
+      }
 
       const drawWMm = cropPtW * scaleMmPerPt;
       const drawHMm = cropPtH * scaleMmPerPt;
-
-      // Align the orange Score Right Anchor line across pages while clamping within [effLeftMm, effLeftMm + availWMm - drawWMm]
-      const envLeftMm = maxLeftFromScoreRightPt * scaleMmPerPt;
-      const envRightMm = maxRightFromScoreRightPt * scaleMmPerPt;
-      const totalEnvMm = envLeftMm + envRightMm;
-      const idealScoreRightXMm = effLeftMm + (availWMm - totalEnvMm) / 2 + envLeftMm;
-
-      const rawSr = typeof p.scoreRight === 'number' ? p.scoreRight : (1 - p.crop.right);
-      const sr = clamp(rawSr, p.crop.left, 1 - p.crop.right);
-      const leftFromScoreRightMm = (sr - p.crop.left) * p.origWidth * scaleMmPerPt;
-
-      const minDestX = effLeftMm;
-      const maxDestX = Math.max(effLeftMm, effLeftMm + availWMm - drawWMm);
-      const destXMm = (scaleMode === 'uniform')
-        ? (idealScoreRightXMm - leftFromScoreRightMm)
-        : clamp(idealScoreRightXMm - leftFromScoreRightMm, minDestX, maxDestX);
-      const targetScoreRightXMm = destXMm + leftFromScoreRightMm;
+      const targetScoreRightXMm = destXMm + leftOfAnchorPt * scaleMmPerPt;
       const destYMm = mTop + (availHMm - drawHMm) / 2;
 
       return {
@@ -4181,6 +4345,17 @@
 
       syncInspectorFromPage();
       renderActiveView();
+
+      // Live re-detect the orange Score Right Anchor while dragging 4-corner or side crop handles
+      const now = performance.now();
+      if (!window._lastLiveAnchorMs || now - window._lastLiveAnchorMs > 85) {
+        window._lastLiveAnchorMs = now;
+        const fastSrc = (hasPerspectiveQuad(p) && cachedUnwarpedEditor.canvas)
+          ? cachedUnwarpedEditor.canvas
+          : getActiveTransformedCanvas();
+        autoReDetectScoreRight(p, { fastCanvas: fastSrc, showToastMsg: false, redrawThumb: false });
+        renderActiveView();
+      }
     }
 
     editorCanvas.addEventListener('mousemove', (e) => handlePointerMoveOnCanvas(e, false));
@@ -4219,9 +4394,17 @@
 
     function finishPointerDrag() {
       if (dragMode) {
+        const finishedMode = dragMode;
         dragMode = null;
         isInteracting = false;
-        drawThumbnail(currentPageIdx);
+        const p = pagesData[currentPageIdx];
+        // Whenever the user finishes adjusting any 4-corner or crop handle (except manually dragging the orange line itself),
+        // immediately re-detect the Score Right Anchor at full resolution with unified toast feedback!
+        if (finishedMode !== 'score-right' && p) {
+          autoReDetectScoreRight(p, { showToastMsg: true, redrawThumb: true });
+        } else {
+          drawThumbnail(currentPageIdx);
+        }
         renderActiveView();
       }
     }
@@ -4256,8 +4439,8 @@
       document.getElementById('rngSkew').value = p.skewDeg;
       document.getElementById('valSkew').textContent = `${p.skewDeg > 0 ? '+' : ''}${p.skewDeg.toFixed(2)}°`;
 
-      document.getElementById('rngWhiteLevel').value = p.filters.whiteLevel;
-      document.getElementById('valWhiteLevel').textContent = p.filters.whiteLevel === 255 ? '255 (Off)' : p.filters.whiteLevel;
+      document.getElementById('rngWhiteLevel').value = 255 - p.filters.whiteLevel;
+      document.getElementById('valWhiteLevel').textContent = formatWhiteLevelLabel(p.filters.whiteLevel);
 
       document.getElementById('rngContrast').value = p.filters.contrast;
       document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
@@ -4377,16 +4560,21 @@
       syncInspectorFromPage();
       drawThumbnail(currentPageIdx);
       renderActiveView();
+
+      clearTimeout(window._numCropAnchorTimer);
+      window._numCropAnchorTimer = setTimeout(() => {
+        autoReDetectScoreRight(p, { showToastMsg: true, redrawThumb: true });
+        renderActiveView();
+      }, 260);
     }
 
     function resetQuadToRectCurrentPage() {
       if (!pdfDoc) return;
       const p = pagesData[currentPageIdx];
       syncQuadFromCrop(p);
-      syncInspectorFromPage();
-      drawThumbnail(currentPageIdx);
+      autoReDetectScoreRight(p, { showToastMsg: false, redrawThumb: true });
       renderActiveView();
-      showToast(`Page ${currentPageIdx + 1} corners reset to a straight rectangle.`);
+      showToast(`⬜ Corners reset & ⚓ Right score end auto-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
     }
 
     function applyCropToScope(scope) {
@@ -4399,16 +4587,13 @@
         if (scope === 'all' || (scope === 'parity' && (i % 2 === 0) === isCurOdd)) {
           pagesData[i].crop = { ...srcCrop };
           pagesData[i].quad = cloneQuad(srcQuad);
-          if (typeof pagesData[i].scoreRight === 'number') {
-            const maxSr = round4(1 - pagesData[i].crop.right);
-            const minSr = round4(pagesData[i].crop.left + 0.02);
-            pagesData[i].scoreRight = round4(clamp(pagesData[i].scoreRight, minSr, maxSr));
-          }
-          drawThumbnail(i);
+          autoReDetectScoreRight(pagesData[i], { showToastMsg: false, redrawThumb: true });
         }
       }
       renderActiveView();
-      showToast(scope === 'all' ? 'Copied crop & perspective quad to all pages.' : `Copied crop & perspective quad to all ${isCurOdd ? 'odd' : 'even'} pages.`);
+      showToast(scope === 'all'
+        ? 'Copied crop & perspective quad to all pages (⚓ anchors auto-detected).'
+        : `Copied crop & perspective quad to all ${isCurOdd ? 'odd' : 'even'} pages (⚓ anchors auto-detected).`);
     }
 
     function onSkewSliderChange(val) {
@@ -4423,22 +4608,22 @@
       clearTimeout(window._skewTimer);
       window._skewTimer = setTimeout(() => {
         isInteracting = false;
-        // Automatically re-detect score boundaries on newly rotated page
-        p.rawBounds = null;
-        analyzePageInkBounds(p, true);
-        const maxSr = round4(1 - p.crop.right);
-        const minSr = round4(p.crop.left + 0.02);
-        p.scoreRight = round4(clamp(p.scoreRight, minSr, maxSr));
-        syncInspectorFromPage();
+        autoReDetectScoreRight(p, { showToastMsg: true, redrawThumb: true });
         renderActiveView();
-        showToast(`⚓ Right score end re-detected (${(p.scoreRight * 100).toFixed(1)}%).`);
-      }, 350);
+      }, 300);
+    }
+
+    // Background Cleanup slider: UI shows removal strength (0% = Off ... 100% = strongest, white point 170)
+    function formatWhiteLevelLabel(whiteLevel) {
+      const strength = 255 - whiteLevel;
+      if (strength <= 0) return 'Off';
+      return `${Math.round(strength / 85 * 100)}%`;
     }
 
     function onFilterChange() {
       if (!pdfDoc) return;
       const p = pagesData[currentPageIdx];
-      p.filters.whiteLevel = parseInt(document.getElementById('rngWhiteLevel').value, 10);
+      p.filters.whiteLevel = 255 - (parseInt(document.getElementById('rngWhiteLevel').value, 10) || 0);
       p.filters.contrast = parseInt(document.getElementById('rngContrast').value, 10);
       p.filters.binarize = document.getElementById('chkBinarize').checked;
       const lpEl = document.getElementById('rngLinePreserve');
@@ -4454,7 +4639,7 @@
         wrapLp.style.pointerEvents = p.filters.binarize ? 'auto' : 'none';
       }
 
-      document.getElementById('valWhiteLevel').textContent = p.filters.whiteLevel === 255 ? '255 (Off)' : p.filters.whiteLevel;
+      document.getElementById('valWhiteLevel').textContent = formatWhiteLevelLabel(p.filters.whiteLevel);
       document.getElementById('valContrast').textContent = `${p.filters.contrast}%`;
 
       // If user turns on pixel filters, suggest 600 DPI 1-Bit Monochrome if currently on native_lossless
@@ -4468,15 +4653,28 @@
       renderActiveView();
     }
 
-    function applyFiltersToAllPages() {
+    // scope: 'tone' = Background Cleanup + Contrast only, 'binarize' = 1-Bit settings only, otherwise all filters
+    function applyFiltersToAllPages(scope = 'all') {
       if (!pdfDoc) return;
-      const curFilters = { ...pagesData[currentPageIdx].filters };
+      const cur = pagesData[currentPageIdx].filters;
       pagesData.forEach(p => {
-        p.filters = { ...curFilters };
+        if (scope === 'tone') {
+          p.filters = { ...p.filters, whiteLevel: cur.whiteLevel, contrast: cur.contrast };
+        } else if (scope === 'binarize') {
+          p.filters = { ...p.filters, binarize: cur.binarize, linePreserve: cur.linePreserve };
+        } else {
+          p.filters = { ...cur };
+        }
       });
       cachedTransformed.pageIdx = -1;
+      cachedUnwarpedEditor = { key: '', canvas: null };
+      cachedUnwarpedCrop = { key: '', canvas: null };
       renderActiveView();
-      showToast('Applied image cleanup settings to all pages.');
+      showToast(scope === 'tone'
+        ? 'Applied Background Cleanup & Contrast to all pages.'
+        : scope === 'binarize'
+          ? 'Applied 1-Bit Binarize settings to all pages.'
+          : 'Applied image cleanup settings to all pages.');
     }
 
     function updateSensitivityLabel(val) {
